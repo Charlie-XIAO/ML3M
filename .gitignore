@@ -1,5 +1,5 @@
 .*/
-_*/
+__pycache__/
 *.log
 *temp*
 *.csv

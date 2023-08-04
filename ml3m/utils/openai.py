@@ -3,18 +3,17 @@ import json
 import os
 import traceback
 import warnings
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Coroutine, Literal
 
 import openai
 
-from .._typing import InputType
-
 
 class OpenAIConfig:
     """OpenAI configuration.
     
-    Attributes
+    Parameters
     ----------
     key : str
         The OpenAI API key.
@@ -45,10 +44,8 @@ def get_openai_config(
 
     Parameters
     ----------
-    config_path : str or pathlib.Path, optional
-        If ``config_path`` is ``None``, this will read the environment variables.
-        Otherwise, this will read from the specified ``config_path``, provided as
-        an absolute path. It is recommended to use ``os.path.join``.
+    config_path : str or pathlib.Path
+        The absolute path to the configuration file.
     on_error : {"raise", "warn", "ignore"}, default="raise"
         Whether to raise, warn, or ignore when meeting bad configurations. Bad
         configurations include missing keys in the configuration file, or API key not
@@ -60,7 +57,6 @@ def get_openai_config(
         The list of OpenAI configuration objects.
     """
     openai_configs: list[OpenAIConfig] = []
-    source: str
 
     def warn_or_raise(msg, on_error):
         if on_error == "warn":
@@ -69,73 +65,36 @@ def get_openai_config(
             raise ValueError(msg)
 
     # Read from the configuration file
-    if config_path is not None:
-        abs_config_path = os.path.abspath(config_path)
-        with open(abs_config_path, "r", encoding="utf-8") as f:
-            configs: list[dict[str, str]] = json.load(f)
-        for config in configs:
-            if "key" in config:
-                openai_configs.append(
-                    OpenAIConfig(
-                        key=config["key"],
-                        n_workers=int(config["n_workers"]),
-                        base=config.get("base", None),
-                    )
+    abs_config_path = os.path.abspath(config_path)
+    with open(abs_config_path, "r", encoding="utf-8") as f:
+        configs: list[dict[str, str]] = json.load(f)
+    for config in configs:
+        if "key" in config:
+            openai_configs.append(
+                OpenAIConfig(
+                    key=config["key"],
+                    n_workers=int(config["n_workers"]),
+                    base=config.get("base", None),
                 )
-            else:
-                warn_or_raise(
-                    f"Key not found in the configuration item {config}", on_error
-                )
-        source = f"configuration file at `{abs_config_path}`"
-
-    # Read from the environment variables
-    else:
-        for k, v in os.environ.items():
-            if k.startswith("OPENAI_API_KEY_"):
-                key_id = k[15:]
-                desired_base = f"OPENAI_API_BASE_{key_id}"
-                desired_n_workers = f"OPENAI_API_N_WORKERS_{key_id}"
-
-                # Try to get base corresponding to key or globally
-                cur_base: str | None = None
-                if desired_base in os.environ:
-                    cur_base = os.environ[desired_base]
-                elif "OPENAI_API_BASE" in os.environ:
-                    cur_base = os.environ["OPENAI_API_BASE"]
-                else:
-                    warn_or_raise(
-                        f"No matching base for `{k}` from the environment variables. "
-                        f"Set either `OPENAI_API_BASE` or `{desired_base}`.",
-                        on_error,
-                    )
-
-                # Try to get n_workers corresponding to key or globally
-                cur_n_workers: int | None = None
-                if desired_n_workers in os.environ:
-                    cur_n_workers = int(os.environ[desired_n_workers])
-                elif "OPENAI_API_N_WORKERS" in os.environ:
-                    cur_n_workers = int(os.environ["OPENAI_API_N_WORKERS"])
-                else:
-                    warn_or_raise(
-                        f"No matching n_workers for `{k}` from the environment "
-                        f"variables. Set either `OPENAI_API_N_WORKERS` or "
-                        f"`{desired_n_workers}`.",
-                        on_error,
-                    )
-
-                # Append the config if both base and n_workers are found
-                openai_configs.append(
-                    OpenAIConfig(key=v, n_workers=cur_n_workers, base=cur_base)
-                )
-        source = "environment variables"
+            )
+        else:
+            warn_or_raise(
+                f"Key not found in the configuration item {config}", on_error
+            )
 
     # Validate the configurations to make sure there are no duplicate keys and the
     # configurations are not empty
     if len(openai_configs) == 0:
-        raise ValueError(f"No valid OpenAI configuration found. Check the {source}.")
+        raise ValueError(
+            "No valid OpenAI configuration found. Check the configuration file at "
+            f"`{abs_config_path}`."
+        )
     key_set = set(openai_config.key for openai_config in openai_configs)
     if len(key_set) != len(openai_configs):
-        raise ValueError(f"Duplicate keys found. Check the {source}.")
+        raise ValueError(
+            "Duplicate keys found. Check the configuration file at "
+            f"`{abs_config_path}`."
+        )
     return openai_configs
 
 
@@ -200,7 +159,11 @@ async def _openai_chatcompletion(
         errmsg = None if finish_reason == "stop" else f"Finished with {finish_reason}"
     except Exception as e:
         reply, usage = None, None
-        errmsg = traceback.format_exc() if err_verbose >= 2 else (
-            f"{type(e).__name__}: {e}" if err_verbose == 1 else type(e).__name__
-        )
+        errmsg: str
+        if err_verbose >= 2:
+            errmsg = traceback.format_exc()
+        elif err_verbose == 1:
+            errmsg = f"{type(e).__name__}: {e}"
+        else:
+            errmsg = type(e).__name__
     return reply, usage, errmsg
