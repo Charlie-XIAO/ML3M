@@ -4,6 +4,6 @@ ml3m
 .. toctree::
    :maxdepth: 2
 
-   ml3m.base
-   ml3m.mcq
-   ml3m.utils.openai
+   modules/ml3m.base
+   modules/ml3m.mcq
+   modules/ml3m.utils.openai

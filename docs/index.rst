@@ -18,6 +18,16 @@ Module Contents
 
    modules
 
+
+Usage Examples
+--------------
+
+.. toctree::
+   :maxdepth: 2
+
+   examples
+
+
 Indices and Tables
 ------------------
 
