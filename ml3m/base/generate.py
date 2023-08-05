@@ -79,6 +79,7 @@ class ResponseGenerator:
         included. Regardless of the ``err_verbose``, verbosity level 0 will be used in
         printout of error messages.
     """
+
     def __init__(
         self,
         orig_dataset: str | Path,
@@ -142,7 +143,7 @@ class ResponseGenerator:
         Returns
         -------
         completed : bool
-            Whether the task has been fully completed. 
+            Whether the task has been fully completed.
         """
         completed: bool = False
         if self.format not in ["jsonl", "json", "csv"]:
@@ -192,7 +193,8 @@ class ResponseGenerator:
                         )
                     else:
                         datait = (
-                            (i, item) for i, item in enumerate(data)
+                            (i, item)
+                            for i, item in enumerate(data)
                             if pd.isna(item[self.response_name])
                         )
                         n_tot = sum(pd.isna(item[self.response_name] for item in data))
@@ -244,7 +246,8 @@ class ResponseGenerator:
                 mlog_item = {
                     "id": i,
                     "kwds": {
-                        "orig_dataset": self.orig_dataset, "dataset": self.dataset
+                        "orig_dataset": self.orig_dataset,
+                        "dataset": self.dataset,
                     },
                     "response": response,
                     "errmsg": errmsg,
@@ -281,5 +284,5 @@ class ResponseGenerator:
                 break
             elif it != self.n_iter - 1:
                 manual_overwrite = False
-                print(f"\033[31m{n_failed} items failed, reiterating...\033[0m")   
-        return completed         
+                print(f"\033[31m{n_failed} items failed, reiterating...\033[0m")
+        return completed

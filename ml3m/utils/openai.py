@@ -11,7 +11,7 @@ import openai
 
 class OpenAIConfig:
     """OpenAI configuration.
-    
+
     Parameters
     ----------
     key : str
@@ -19,6 +19,7 @@ class OpenAIConfig:
     base : str
         The OpenAI API base.
     """
+
     def __init__(self, key: str, n_workers: int, base: str | None = None):
         self.key = key
         self.n_workers = n_workers
@@ -36,9 +37,9 @@ class OpenAIConfig:
 
 
 def get_openai_config(
-        config_path: str | Path | None = None,
-        on_error: Literal["raise", "warn", "ignore"] = "raise"
-    ) -> list[OpenAIConfig]:
+    config_path: str | Path | None = None,
+    on_error: Literal["raise", "warn", "ignore"] = "raise",
+) -> list[OpenAIConfig]:
     """Get the configurations for OpenAI.
 
     Parameters
@@ -49,7 +50,7 @@ def get_openai_config(
         Whether to raise, warn, or ignore when meeting bad configurations. Bad
         configurations include missing keys in the configuration file, or API key not
         having a matching API base in the environment variables.
-    
+
     Returns
     -------
     openai_configs : list of OpenAIConfig
@@ -77,9 +78,7 @@ def get_openai_config(
                 )
             )
         else:
-            warn_or_raise(
-                f"Key not found in the configuration item {config}", on_error
-            )
+            warn_or_raise(f"Key not found in the configuration item {config}", on_error)
 
     # Validate the configurations to make sure there are no duplicate keys and the
     # configurations are not empty
@@ -102,7 +101,7 @@ async def _openai_chatcompletion(
     openai_config: OpenAIConfig,
     timeout: float = 60,
     model: str = "gpt-3.5-turbo",
-    err_verbose : int = 1,
+    err_verbose: int = 1,
     **kwargs,
 ) -> Coroutine[Any, Any, tuple[str | None, dict | None, str | None]]:
     """OpenAI asynchronous ChatCompletion.

@@ -11,7 +11,7 @@ def _manage_timed_logs(prefix, keep: int = 10):
         The prefix to the log.
     keep : int, default=10
         The number of logs to keep.
-    
+
     Returns
     -------
     mlog_path : str
@@ -22,7 +22,8 @@ def _manage_timed_logs(prefix, keep: int = 10):
         os.makedirs(base)
     dtformat = "%Y-%m-%d-%H.%M.%S.%f"
     fnames = [
-        fname for fname in os.listdir(base)
+        fname
+        for fname in os.listdir(base)
         if fname.startswith(f"{prefix}_")
         and fname.endswith(".log")
         and os.path.isfile(os.path.join(base, fname))

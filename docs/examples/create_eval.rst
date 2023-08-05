@@ -66,6 +66,11 @@ For instance, if the dataset is of ``.jsonl`` format but each data item is a lis
 instead of a dictionary, one should expect ``data_item`` to be a list. If the dataset
 is of ``.csv`` format, one should expect ``data_item`` to be a :class:`pandas.Series`.
 
+.. note::
+    If you need to load for instance tokenizers and models, please do in advance. The
+    ``query`` function will be called iteratively without parallelization, so loading
+    tokenizers and models inside ``query`` will be unacceptably slow.
+
 
 Creating the :class:`ml3m.base.ResponseGenerator` instance
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -120,4 +125,20 @@ For more information, please refer to its documentation.
 Appending model responses to the original dataset
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Finally, it suffices to call the :meth:`ml3m.base.ResponseGenerator.generate` method.
+Finally, it suffices to call the :meth:`ml3m.base.ResponseGenerator.generate` method,
+appends the model responses. Simply do the following:
+
+.. code-block:: python
+
+    generator.generate()
+
+As previously mentioned, this should create a new dataset under relative position
+``eval_datasets/dataset.jsonl`` that includes the model responses. (With
+``dataset=None``, it does not create new dataset but modifies the original dataset at
+``datasets/orig_dataset.jsonl``).
+
+:meth:`ml3m.base.ResponseGenerator.generate` actually takes an ``overwrite`` parameter,
+defaulted to ``False``. This is useful because the dataset *partially* processed. As is
+previously mentioned, models *can* fail, even with multiple iterations. 
+:meth:`ml3m.base.ResponseGenerator.generate` returns a boolean value that indicates
+whether all data items have been processed.

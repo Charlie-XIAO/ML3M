@@ -19,7 +19,9 @@ from .._typing import DataItemType, DatasetFormat
 
 _DOCSTRINGS = {}
 
-_DOCSTRINGS["prereq"] = r"""
+_DOCSTRINGS[
+    "prereq"
+] = r"""
     To use this evaluator, a dataset of a set of inputs, expected responses, and actual
     responses need to be prepared. The dataset can take the following formats:
 
@@ -42,7 +44,7 @@ _DOCSTRINGS["prereq"] = r"""
 )
 class BaseEvaluator:
     """Base evaluator class.
-    
+
     This class is meant to be subclassed. The methods that must be overridden include:
 
     - :meth:`BaseEvaluator._get_score`
@@ -61,6 +63,7 @@ class BaseEvaluator:
     format : {{"jsonl", "json", "csv"}}, default="jsonl"
         The format of ``dataset``, as specified above.
     """
+
     def __init__(
         self,
         dataset: str | Path,
@@ -251,11 +254,12 @@ class BaseEvaluator:
             If ``scores`` is not a real number or a dictionary with real values.
         """
         if isinstance(scores, Real) and not pd.isna(scores):
-            return scores
+            return {"scores": scores}
         elif isinstance(scores, dict):
             bad_item = next(
                 (
-                    (subject, score) for subject, score in scores.items()
+                    (subject, score)
+                    for subject, score in scores.items()
                     if not isinstance(score, Real) or pd.isna(score)
                 ),
                 None,
@@ -323,6 +327,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         included. Regardless of the ``err_verbose``, verbosity level 0 will be used in
         printout of error messages.
     """
+
     def __init__(
         self,
         dataset: str | Path,
@@ -405,7 +410,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         extracted from the replies. This way the exceptions can be caught, and the
         current data item will be considered a failure. Either it will be re-evaluated
         in the following iterations, or it will be left unevaluated.
-        
+
         Parameters
         ----------
         reply : str
@@ -487,7 +492,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             | tuple[int, DataItemType, Literal[False]]
         ],
         openai_config: OpenAIConfig,
-        mlog_path : str | Path,
+        mlog_path: str | Path,
         progbar: tqdm,
         it_id: int,
         worker_id: int,
@@ -522,10 +527,14 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             reply: str | None
             usage: dict | None
             errmsg: str | None
-            messages = [
-                {"role": "system", "content": sys_msg},
-                {"role": "user", "content": eval_prompt},
-            ] if sys_msg else [{"role": "user", "content": eval_prompt}]
+            messages = (
+                [
+                    {"role": "system", "content": sys_msg},
+                    {"role": "user", "content": eval_prompt},
+                ]
+                if sys_msg
+                else [{"role": "user", "content": eval_prompt}]
+            )
             reply, usage, errmsg = await _openai_chatcompletion(
                 msgs=messages,
                 openai_config=openai_config,
@@ -584,14 +593,18 @@ class BaseOpenAIEvaluator(BaseEvaluator):
                 progbar.update(1)
             async with self._mainlk:
                 shared_resources.append(
-                    (i, eval_scores, True) if eval_scores is not None else (
-                        i, data_item, False
-                    )
+                    (i, eval_scores, True)
+                    if eval_scores is not None
+                    else (i, data_item, False)
                 )
             queue.task_done()
 
     async def _mainloop(
-        self, *, it: int, mlog_path: str | Path, openai_configs: list[OpenAIConfig],
+        self,
+        *,
+        it: int,
+        mlog_path: str | Path,
+        openai_configs: list[OpenAIConfig],
     ) -> Coroutine[Any, Any, None]:
         """Main event loop for asynchronous querying.
 
@@ -679,4 +692,5 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         def yield_data_in_iteration():
             for item in todo_items:
                 yield item
+
         self._yield_data_in_iteration = yield_data_in_iteration

@@ -10,7 +10,9 @@ from .._typing import DataItemType, DatasetFormat
 
 _DOCSTRINGS = {}
 
-_DOCSTRINGS["prereq"] = r"""
+_DOCSTRINGS[
+    "prereq"
+] = r"""
     To use this evaluator, a dataset of a set of inputs, expected responses, and actual
     responses need to be prepared. The dataset can take the following formats:
 
@@ -105,6 +107,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
             )
             return formatted_question, response, answer
     """
+
     def __init__(
         self,
         dataset: str | Path,
@@ -141,7 +144,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
             f"### The correct answer to this question is: {actual}\n\n### My answer "
             f"to this question is:\n```\n{expected}\n```\n\nIf my answer is correct, "
             "reply '1'. If my answer is incorrect, reply '0'. Do not include any "
-            "additional information."
+            "additional information.",
         )
 
     def _extract_scores(self, reply: str) -> Real | dict[Any, Real]:
@@ -154,15 +157,13 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         else:
             raise ValueError(
                 "The expected OpenAI response is 0 (incorrect answer) or 1 (correct "
-                f"answer); got {stripped_reply} instead."
+                f"answer); got '{stripped_reply}' instead."
             )
 
     def evaluate(
         self, *, overwrite: bool = False, skip_openai_api_cfm: bool = False
     ) -> None:
-        super().evaluate(
-            overwrite=overwrite, skip_openai_api_cfm=skip_openai_api_cfm
-        )
+        super().evaluate(overwrite=overwrite, skip_openai_api_cfm=skip_openai_api_cfm)
 
     def sync(self) -> None:
         super().sync()
@@ -226,6 +227,7 @@ class McqRegexEvaluator(BaseEvaluator):
             expected, actual = data_item[["answer", "response"]]
             return actual, expected
     """
+
     def __init__(
         self,
         dataset: str | Path,
