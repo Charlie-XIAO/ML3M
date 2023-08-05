@@ -6,17 +6,20 @@
 Welcome to ml3m's documentation!
 ================================
 
+.. note::
+   This package is still under development. Please do not use yet.
+
+
+Module Contents
+---------------
+
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    modules
 
+Indices and Tables
+------------------
 
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
+- :ref:`genindex`
+- :ref:`modindex`

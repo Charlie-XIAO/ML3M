@@ -3,11 +3,9 @@ from numbers import Real
 from pathlib import Path
 from typing import Any, Callable, Literal
 
-from ml3m._typing import DataItemType, DatasetFormat
-
-from ..utils.eval import BaseEvaluator, BaseOpenAIEvaluator
+from ..base.eval import BaseEvaluator, BaseOpenAIEvaluator
 from .._docstring import format_docstring
-from .._typing import DataItemType, McqOptionFormat
+from .._typing import DataItemType, DatasetFormat
 
 
 _DOCSTRINGS = {}
@@ -27,45 +25,6 @@ _DOCSTRINGS["prereq"] = r"""
     - ``.csv``: The whole file will be read by :func:`pandas.read_csv` as a
       :class:`pandas.DataFrame`. Each row is to be handled by ``info``.
 """
-
-
-def mcq_regex_patterns(
-    option_format: McqOptionFormat = "upper case",
-    n_options: int = 4,
-) -> list[re.Pattern[str]]:
-    """Get the common regex patterns for matching options in multiple choice questions.
-
-    Parameters
-    ----------
-    TODO
-    """
-    choices: str
-    if option_format == "upper case":
-        choices = f"[A-{chr(64 + n_options)}]"
-    elif option_format == "lower case":
-        choices = f"[a-{chr(96 + n_options)}]"
-    else:
-        choices = f"[1-{n_options}]"
-    regexes = [
-        fr"^选({choices})",
-        fr"^选项({choices})",
-        fr"答案是\s?选?项?\s?({choices})",
-        fr"答案为\s?选?项?\s?({choices})",
-        fr"答案应为\s?选?项?\s?({choices})",
-        fr"答案选\s?选?项?\s?({choices})",
-        fr"答案是:\s?选?项?\s?({choices})",
-        fr"答案应该是:\s?选?项?\s?({choices})",
-        fr"正确的一项是\s?({choices})",
-        fr"答案为:\s?选?项?\s?({choices})",
-        fr"答案应为:\s?选?项?\s?({choices})",
-        fr"答案:\s?选?项?\s?({choices})",
-        fr"答案是：\s?选?项?\s?({choices})",
-        fr"答案应该是：\s?选?项?\s?({choices})",
-        fr"答案为：\s?选?项?\s?({choices})",
-        fr"答案应为：\s?选?项?\s?({choices})",
-        fr"答案：\s?选?项?\s?({choices})",
-    ]
-    return [re.compile(regex) for regex in regexes]
 
 
 @format_docstring(prereq=_DOCSTRINGS["prereq"])

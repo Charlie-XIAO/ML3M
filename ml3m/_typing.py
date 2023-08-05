@@ -7,4 +7,3 @@ import pandas as pd
 
 DataItemType = pd.Series | list | dict
 DatasetFormat = Literal["jsonl", "json", "csv"]
-McqOptionFormat = Literal["upper case", "lower case", "digit"]

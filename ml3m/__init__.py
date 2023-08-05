@@ -1,9 +1,6 @@
-from .generate import ResponseGenerator
-
 __all__ = [
     # Submodules
+    "base",
     "mcq",
     "utils",
-    # Classes
-    "ResponseGenerator",
 ]

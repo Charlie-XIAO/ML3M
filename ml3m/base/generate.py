@@ -8,8 +8,8 @@ from typing import Callable, Generator
 import pandas as pd
 from tqdm import tqdm
 
-from ._logging import _manage_timed_logs
-from ._typing import DataItemType, DatasetFormat
+from .._logging import _manage_timed_logs
+from .._typing import DataItemType, DatasetFormat
 
 
 class ResponseGenerator:
@@ -181,12 +181,14 @@ class ResponseGenerator:
                 if it != 0 or not (overwrite or manual_overwrite):
                     if islist:
                         raise ValueError(
-                            "``overwrite=False`` is not possible if data items are lists since "
-                            "it is vague where to look for the existing response."
+                            "``overwrite=False`` is not possible if data items are "
+                            "lists since it is vague where to look for the existing "
+                            "response."
                         )
                     elif any(self.response_name not in item for _, item in data):
                         raise ValueError(
-                            f"Some data items are missing the key '{self.response_name}'"
+                            "Some data items are missing the key "
+                            f"'{self.response_name}'"
                         )
                     else:
                         datait = (
@@ -241,7 +243,9 @@ class ResponseGenerator:
                 # Write the log and print information based on verbosity level
                 mlog_item = {
                     "id": i,
-                    "kwds": {"orig_dataset": self.orig_dataset, "dataset": self.dataset},
+                    "kwds": {
+                        "orig_dataset": self.orig_dataset, "dataset": self.dataset
+                    },
                     "response": response,
                     "errmsg": errmsg,
                 }
@@ -272,7 +276,7 @@ class ResponseGenerator:
 
             # Print execution summary
             if n_failed == 0:
-                print(f"\033[92mAll items done.\033[0m")
+                print("\033[92mAll items done.\033[0m")
                 completed = True
                 break
             elif it != self.n_iter - 1:

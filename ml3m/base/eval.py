@@ -11,7 +11,7 @@ from typing import Any, Coroutine, Generator, Literal, NoReturn
 import pandas as pd
 from tqdm import tqdm
 
-from .openai import _openai_chatcompletion, get_openai_config, OpenAIConfig
+from ..utils.openai import _openai_chatcompletion, get_openai_config, OpenAIConfig
 from .._docstring import format_docstring
 from .._logging import _manage_timed_logs
 from .._typing import DataItemType, DatasetFormat
