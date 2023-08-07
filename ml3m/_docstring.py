@@ -1,4 +1,4 @@
-# This file is for docstring-relevant functionalities
+"""This file is for docstring-relevant functionalities"""
 
 
 def format_docstring(**kwargs):

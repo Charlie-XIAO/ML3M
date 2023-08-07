@@ -1,8 +1,6 @@
-from .eval import McqOpenAIEvaluator, McqRegexEvaluator
-
+from .eval import McqOpenAIEvaluator
 
 __all__ = [
     # Classes
     "McqOpenAIEvaluator",
-    "McqRegexEvaluator",
 ]

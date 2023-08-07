@@ -1,14 +1,14 @@
 import json
 import os
+from pathlib import Path
 import shutil
 import traceback
-from pathlib import Path
 from typing import Callable, Generator
 
 import pandas as pd
 from tqdm import tqdm
 
-from .._logging import _manage_timed_logs
+from .._logging import manage_timed_logs
 from .._typing import DataItemType, DatasetFormat
 
 
@@ -163,7 +163,7 @@ class ResponseGenerator:
             shutil.copyfile(self.orig_dataset, self.dataset)
             manual_overwrite = True
         destination = self.orig_dataset if self.dataset is None else self.dataset
-        mlog_path = _manage_timed_logs(prefix="model", keep=10)
+        mlog_path = manage_timed_logs(prefix="model", keep=10)
 
         for it in range(self.n_iter):
             print(f"### Iteration {it}")

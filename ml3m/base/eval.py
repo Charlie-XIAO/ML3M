@@ -1,55 +1,29 @@
 import asyncio
+from datetime import datetime
 import json
-import os
-import traceback
-import warnings
-from functools import partial
 from numbers import Real
+import os
 from pathlib import Path
-from typing import Any, Coroutine, Generator, Literal, NoReturn
+from typing import Any, Coroutine, Generator
+import warnings
 
+import openai
 import pandas as pd
-from tqdm import tqdm
 
-from ..utils.openai import _openai_chatcompletion, get_openai_config, OpenAIConfig
-from .._docstring import format_docstring
-from .._logging import _manage_timed_logs
-from .._typing import DataItemType, DatasetFormat
-
-
-_DOCSTRINGS = {}
-
-_DOCSTRINGS[
-    "prereq"
-] = r"""
-    To use this evaluator, a dataset of a set of inputs, expected responses, and actual
-    responses need to be prepared. The dataset can take the following formats:
-
-    - ``.jsonl``: Each line will be read by :func:`json.loads`, either as a list or as
-      a dictionary. This is to be handled in :meth:`{method}`.
-
-    - ``.json``: The whole file will be read by :func:`json.load`, and it should be a
-      json array (and read as a list). Each item in the list will be treated in the
-      same way as each line in the ``.jsonl`` format. It can be either a list or a
-      dictionary, to be handled in :meth:`{method}`.
-
-    - ``.csv``: The whole file will be read by :func:`pandas.read_csv` as a
-      :class:`pandas.DataFrame`. Each row is to be handled in
-      :meth:`{method}`.
-"""
+from .._async import AsyncRunner
+from .._color import COLOR, colored
+from .._logging import manage_timed_logs
+from .._paths import ensure_path, validate_path
+from .._typing import DataItemType, DatasetFormat, LoggingMode
+from ..utils.openai import get_openai_config
 
 
-@format_docstring(
-    prereq=_DOCSTRINGS["prereq"].format(method="BaseEvaluator._get_score")
-)
 class BaseEvaluator:
     """Base evaluator class.
 
     This class is meant to be subclassed. The methods that must be overridden include:
 
-    - :meth:`BaseEvaluator._get_score`
-
-    {prereq}
+    - :meth:`BaseEvaluator._aget_score`
 
     Parameters
     ----------
@@ -60,8 +34,22 @@ class BaseEvaluator:
         it exists, its file contents will be treated as a (partially) written result.
         Whether to overwrite the existing results or to build on them depend on
         ``overwrite`` when using the ``evaluate`` method.
-    format : {{"jsonl", "json", "csv"}}, default="jsonl"
-        The format of ``dataset``, as specified above.
+    fmt : {"jsonl", "json", "csv"}, default="jsonl"
+        The format of ``dataset``.
+    workers : int or list of dict, default=1
+        If ``workers`` is an integer, it will be considered the number of workers. If
+        specified only one worker, the dataset will be processed sequentially, and
+        otherwise it will be asynchronously parallelized. If ``workers`` is a list of
+        dictionaries, the length of this list will be considered the number of workers.
+        Each dictionary should be the additional keyword arguments passed to
+        :meth:`BaseEvaluator._aget_score`.
+    logging_mode : {"all", "failed", "none"}, default="all"
+        The logging mode, whether to save the logs of all items, or only of failed
+        items, or save no log.
+    verbose : int, default=1
+        The verbosity level of the processing. For level 0, only a progress bar will be
+        displayed. For level 1, the errored items will also be displayed. For levels
+        higher than 2, all items will be displayed.
     """
 
     def __init__(
@@ -69,20 +57,50 @@ class BaseEvaluator:
         dataset: str | Path,
         save_path: str | Path,
         *,
-        format: DatasetFormat = "jsonl",
+        fmt: DatasetFormat = "jsonl",
+        workers: int | list[dict] = 1,
+        logging_mode: LoggingMode = "all",
+        verbose: int = 1,
     ) -> None:
         self.dataset = dataset
         self.save_path = save_path
-        self.format = format
+        self.fmt = fmt
+        self.workers = workers
+        self.logging_mode = logging_mode
+        self.verbose = verbose
 
-        # Validate the paths and format
-        if not os.path.exists(self.dataset):
-            raise ValueError(f"Dataset not found at {os.path.abspath(self.dataset)}")
-        if self.format not in ["jsonl", "json", "csv"]:
-            raise ValueError(f"Invalid format: {self.format}")
-        self.sync()
+        # Validate the arguments
+        validate_path(self.dataset)
+        if self.fmt not in ["jsonl", "json", "csv"]:
+            raise ValueError(
+                f"Invalid fmt: '{self.fmt}'; must be one of 'jsonl', 'json', and "
+                "'csv'."
+            )
+        if self.logging_mode not in ["all", "failed", "none"]:
+            raise ValueError(
+                f"Invalid logging_mode: '{self.logging_mode}'; must be one of 'all', "
+                "'failed', and 'none'."
+            )
 
-    def _get_score(data_item: DataItemType) -> Real | dict[Any, Real]:
+        # Load the key arguments for workers
+        self._worker_kwargs: list[dict]
+        if isinstance(self.workers, int):
+            if self.workers < 1:
+                raise ValueError(
+                    f"Invalid workers: '{workers}'; if given as integer, must be >= 1."
+                )
+            self._worker_kwargs = [{} for _ in range(self.workers)]
+        elif isinstance(self.workers, list):
+            if any(not isinstance(worker, dict) for worker in self.workers):
+                raise ValueError(
+                    f"Invalid workers: '{workers}'; if given as list, each element "
+                    "must be a keyword dictionary."
+                )
+            self._worker_kwargs = self.workers
+
+    async def _aget_score(
+        self, data_item: DataItemType, **kwargs
+    ) -> Coroutine[Any, Any, Real | dict[Any, Real]]:
         """Evaluate a data item and obtain its score(s).
 
         :meta public:
@@ -90,10 +108,9 @@ class BaseEvaluator:
         Parameters
         ----------
         data_item : DataItemType
-            The data item. If ``format="jsonl"``, this is one line of ``dataset``. If
-            ``format="json"``, this is one item of the json array loaded from
-            ``dataset``. If ``format="csv"``, this is one row of the
-            :class:`pandas.DataFrame` loaded from ``dataset``.
+            The data item.
+        **kwargs
+            The additional keyword arguments.
 
         Returns
         -------
@@ -103,99 +120,36 @@ class BaseEvaluator:
 
         Notes
         -----
-        This method is not implemented and must be overridden in subclasses.
+        This method is not implemented and must be overridden in subclasses. Note that
+        this function must be defined as asynchronous, but it is okay that it does not
+        await for anything.
+
+        Moreover, it is recommended *not* to catch the exceptions that cause the
+        processing of a data item to fail, since otherwise
+        :meth:`BaseEvaluator.evaluate` will not realize that the data item errors out.
         """
         raise NotImplementedError
 
-    def evaluate(self, *, overwrite: bool = False) -> None:
-        """Evaluate the specified dataset.
+    def _sync_save_path(self, overwrite: bool = False) -> None:
+        """Sync up with the results in the save path.
+
+        This loads ``save_path`` and sets ``_result_df`` correspondingly.
 
         Parameters
         ----------
         overwrite : bool, default=False
-            Whether to overwrite the data in ``save_path``. If ``False``, the
-            evaluation will be built upon existing data in ``save_path``, otherwise
-            all data will be evaluated are existing data will be overwritten.
+            Whether to ignore existing results.
         """
-        if overwrite:
-            self._df = pd.DataFrame(columns=["i"], dtype=pd.Int64Dtype)
-        overview = list(self._yield_data_in_iteration())
-        if not overview:
-            print("The evaluation has been fully completed.")
-            return
-
-        # Run the evaluation on each data item
-        progbar = tqdm(total=len(overview))
-        result_scores: dict[int, dict[Any, Real]] = {}
-        for i, data_item in self._yield_data(overwrite=overwrite):
-            eval_scores = self._check_scores(self._get_score(data_item))
-            result_scores[i] = eval_scores
-        progbar.close()
-
-        # Update the obtained data and write the DataFrame
-        print("Updating results...", end=" ", flush=True)
-        new_df = pd.DataFrame(result_scores).T.reset_index(names="i")
-        self._df = pd.concat([self._df, new_df])
-        missing_data = self._df.isna().any()
-        if missing_data.any():
-            warnings.warn(
-                "\033[93mUnexpected missing values detected in the columns "
-                f"{list(missing_data[missing_data].index)}\033[0m",
-                UserWarning,
-                stacklevel=2,
-            )
-        self._df.convert_dtypes().sort_values(by=["i"]).to_csv(
-            self.save_path, index=False
-        )
-        print(f"done, available at:\n{os.path.abspath(self.save_path)}")
-
-    def sync(self) -> None:
-        """Sync up with the results in the save path.
-
-        This method should be called whenever the file at ``save_path`` is modified yet
-        one still uses the original evaluator instance.
-        """
-        abs_save_path = os.path.abspath(self.save_path)
+        self._result_df: pd.DataFrame
         if not os.path.exists(self.save_path):
-            print(
-                f"\033[93mSave path not found at {abs_save_path}; forcefully created"
-                "\033[0m",
-            )
-            directories, _ = os.path.split(abs_save_path)
-            if not os.path.exists(directories):
-                os.makedirs(directories)
-            self._df = pd.DataFrame(columns=["i"], dtype=pd.Int64Dtype)
-            self._df.to_csv(self.save_path, index=False)
+            ensure_path(self.save_path)
+            self._result_df = pd.DataFrame(columns=["i"], dtype=pd.Int64Dtype)
+        elif overwrite:
+            self._result_df = pd.DataFrame(columns=["i"], dtype=pd.Int64Dtype)
         else:
-            try:
-                self._df = pd.read_csv(self.save_path)
-            except Exception as e:
-                raise type(e)(
-                    "Failed to load as a DataFrame from ``save_path``\nPath: "
-                    f"{abs_save_path}\nDetails: {e}"
-                )
+            self._result_df = pd.read_csv(self.save_path)
 
-        # Validate the loaded DataFrame (not exhaustive)
-        self._df = self._df.convert_dtypes()
-        if "i" not in self._df.columns:
-            raise ValueError(
-                "DataFrame loaded from ``save_path`` does not have the column 'i'\n"
-                f"Path: {abs_save_path}"
-            )
-        if len(self._df) > 0 and (
-            not pd.api.types.is_integer_dtype(self._df["i"].dtype)
-            or not all(
-                pd.api.types.is_numeric_dtype(dtype) for dtype in self._df.dtypes
-            )
-        ):
-            raise ValueError(
-                "DataFrame loaded from ``save_path`` has wrong dtype; the index "
-                "column 'i' is required to be integer dtype, and the other columns "
-                "representing scoring subjects are required to be real dtype\nPath: "
-                f"{abs_save_path}"
-            )
-
-    def _yield_data(
+    def _yield_dataset(
         self, overwrite: bool = False
     ) -> Generator[tuple[int, DataItemType], Any, None]:
         """Yield the indices and data items to be done.
@@ -203,35 +157,31 @@ class BaseEvaluator:
         Yield
         -----
         i : int
-            The index of the data item. It is the index of the line if
-            ``format="jsonl"``, the index in the json array if ``format="json"``, or
-            the index of the row if ``format="csv"``.
+            The index of the data item.
         data_item : DataItemType
             The data item.
         """
         existing_indices: list = []
         if not overwrite:
-            existing_indices = list(self._df.loc[:, "i"])
+            existing_indices = list(self._result_df.loc[:, "i"])
 
-        # Yield indices and corresponding data items, skipping existing ones
-        if self.format == "jsonl":
+        # Yield the indices and corresponding data items
+        if self.fmt == "jsonl":
             with open(self.dataset, "r", encoding="utf-8") as f:
                 for i, line in enumerate(f):
                     if i not in existing_indices:
                         yield i, json.loads(line)
-        elif self.format == "json":
+        elif self.fmt == "json":
             with open(self.dataset, "r", encoding="utf-8") as f:
                 all_data = json.load(f)
             for i, item in enumerate(all_data):
                 if i not in existing_indices:
                     yield i, item
-        elif self.format == "csv":
-            data_df = pd.read_csv(self.dataset)
-            for i, row in data_df.iterrows():
+        else:  # self.fmt == "csv"
+            all_data = pd.read_csv(self.dataset)
+            for i, row in all_data.iterrows():
                 if i not in existing_indices:
                     yield i, row
-        else:
-            raise ValueError(f"Invalid format: {self.format}")
 
     def _check_scores(self, scores: Real | dict[Any, Real]) -> dict[Any, Real]:
         """Check and format the scores.
@@ -266,22 +216,110 @@ class BaseEvaluator:
             )
             if bad_item is not None:
                 raise TypeError(
-                    "The scores are expected to be a real number or a dictionary with "
-                    f"real values, got ``{scores}`` of type dict but there exists "
-                    f"{bad_item[0]}: {bad_item[1]} of type ``{type(bad_item[1])}``."
+                    "The scores must be either a real number or a dictionary with "
+                    f"real values; got a dictionary but there exists "
+                    f"'{bad_item[0]}: {bad_item[1]}' of type '{type(bad_item[1])}'."
                 )
             else:
                 return scores
         else:
             raise TypeError(
-                "The scores are expected to be a real number or a dictionary with "
-                f"real values, got ``{scores}`` of type ``{type(scores)}`` instead."
+                "The scores must be either a real number or a dictionary with real "
+                f"values; got '{scores}' of type '{type(scores)}' instead."
             )
 
+    def evaluate(self, *, overwrite: bool = False) -> None:
+        """Evaluate the specified dataset.
 
-@format_docstring(
-    prereq=_DOCSTRINGS["prereq"].format(method="BaseOpenAIEvaluator._prompt")
-)
+        Parameters
+        ----------
+        overwrite : bool, default=False
+            Whether to overwrite the data in ``save_path``. If ``False``, the
+            evaluation will be built upon existing data in ``save_path``, otherwise
+            all data will be evaluated are existing data will be overwritten.
+        """
+        self._sync_save_path(overwrite=overwrite)
+        mlog_path = manage_timed_logs(type(self).__name__)
+        result_scores: dict[int, dict[Any, Real]] = {}
+
+        async def process_func(
+            item: tuple[int, DataItemType],
+            addtlks: list[asyncio.Lock] | None = None,
+            **kwargs,
+        ) -> Coroutine[Any, Any, tuple[Any, str, str]]:
+            i, data_item = item
+            eval_scores: dict[Any, Real] | None = None
+            norm_msg: str | None = None
+            err_msg: str | None = None
+
+            # Handle all exceptions
+            try:
+                scores = await self._aget_score(data_item, **kwargs)
+                eval_scores = self._check_scores(scores)
+                norm_msg = (
+                    f"Item.{i:<10} "
+                    f"{json.dumps(eval_scores, ensure_ascii=False):.40s}"
+                )
+            except Exception as e:
+                err_msg = type(e).__name__
+
+            # Write the log on demand
+            if (
+                self.logging_mode == "failed"
+                and eval_scores is None
+                or self.logging_mode == "all"
+            ):
+                mlog_item = {
+                    "time": str(datetime.now()),
+                    "index": i,
+                    "eval_scores": eval_scores,
+                    "norm_msg": norm_msg,
+                    "err_msg": err_msg,
+                }
+                async with addtlks[0]:
+                    with open(mlog_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
+            return (
+                None if eval_scores is None else (i, eval_scores),
+                norm_msg,
+                f"Item.{i:<10} {err_msg}",
+            )
+
+        # Activate the asynchronous runner (sequential mode if only one worker)
+        runner = AsyncRunner(
+            items=self._yield_dataset(overwrite=overwrite),
+            worker_kwargs=self._worker_kwargs,
+            process_func=process_func,
+            n_locks=1,
+            verbose=self.verbose,
+        )
+        results, _ = runner.run()
+        for i, eval_scores in results:
+            result_scores[i] = eval_scores
+
+        # Update the file with the obtained results
+        new_df = pd.DataFrame(result_scores).T.reset_index(names="i")
+        self._result_df = pd.concat([self._result_df, new_df])
+        missing_data = self._result_df.isna().any()
+        if missing_data.any():
+            warnings.warn(
+                "Unexpected missing values detected in the columns "
+                f"{list(missing_data[missing_data].index)}",
+                UserWarning,
+                stacklevel=2,
+            )
+        self._result_df.convert_dtypes().sort_values(by=["i"]).to_csv(
+            self.save_path, index=False
+        )
+
+        # Summarize the save location (and possibly log location)
+        print(colored("Results can be found at:", COLOR.GREEN))
+        print(os.path.abspath(self.save_path))
+        if self.logging_mode != "none":
+            print(colored("Execution log can be found at:", COLOR.GREEN))
+            print(os.path.abspath(os.path.abspath(mlog_path)))
+
+
 class BaseOpenAIEvaluator(BaseEvaluator):
     """Base evaluator class via OpenAI.
 
@@ -290,23 +328,19 @@ class BaseOpenAIEvaluator(BaseEvaluator):
     - :meth:`BaseOpenAIEvaluator._prompt`
     - :meth:`BaseOpenAIEvaluator._extract_scores`
 
-    {prereq}
-
     Parameters
     ----------
     dataset : str or pathlib.Path
         The absolute path to the evaluation dataset.
-    openai_config : str or pathlib.Path
-        The absolute path to the OpenAI configuration file.
     save_path : str or pathlib.Path
         The absolute path to the save location. This path may or may not exist, and if
         it exists, its file contents will be treated as a (partially) written result.
         Whether to overwrite the existing results or to build on them depend on
         ``overwrite`` when using the ``evaluate`` method.
-    format : {{"jsonl", "json", "csv"}}, default="jsonl"
-        The format of ``dataset``, as specified above.
-    n_iter : int, default=3
-        The maximum number of iterations if OpenAI querying failed on any data item.
+    openai_config : str or pathlib.Path
+        The absolute path to the OpenAI configuration file.
+    fmt : {"jsonl", "json", "csv"}, default="jsonl"
+        The format of ``dataset``.
     timeout : float, default=60
         The timeout in seconds. This is not the OpenAI timeout, but the timeout for
         cancelling the worker tasks.
@@ -314,56 +348,48 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         The ID of the model to use, must be one of the available OpenAI models that
         support the ChatCompletion API. See also
         https://platform.openai.com/docs/models/model-endpoint-compatibility
+    logging_mode : {"all", "failed", "none"}, default="all"
+        The logging mode, whether to save the logs of all items, or only of failed
+        items, or save no log.
     verbose : int, default=1
-        The verbosity level of OpenAI querying printout. For level 0, only a progress
-        bar will be displayed. For level 1, the errored queries will also be displayed.
-        For level higher than 2, all queries will be displayed. Regardless of the
-        verbosity level, the full log will be written, except that the verbosity of
-        exceptions will depend on ``err_verbose``.
-    err_verbose : int, default=1
-        The verbosity level of the error message when writing logs. For level 0, only
-        the exception type will be included. For level 1, the exception message will
-        also be included. For level higher than 2, the full stack trace will be
-        included. Regardless of the ``err_verbose``, verbosity level 0 will be used in
-        printout of error messages.
+        The verbosity level of the processing. For level 0, only a progress bar will be
+        displayed. For level 1, the errored items will also be displayed. For levels
+        higher than 2, all items will be displayed.
     """
 
     def __init__(
         self,
         dataset: str | Path,
-        openai_config: str | Path,
         save_path: str | Path,
+        openai_config: str | Path,
         *,
-        format: DatasetFormat = "jsonl",
-        n_iter: int = 3,
+        fmt: DatasetFormat = "jsonl",
         timeout: float = 60,
         model: str = "gpt-3.5-turbo",
+        logging_mode: LoggingMode = "all",
         verbose: int = 1,
-        err_verbose: int = 1,
     ) -> None:
+        self.openai_config = openai_config
+        self.timeout = timeout
+        self.model = model
+
+        # Load the OpenAI configurations
+        validate_path(self.openai_config)
+        worker_kwargs = [
+            {"api_key": config.key, "api_base": config.base}
+            for config in get_openai_config(self.openai_config)
+            for _ in range(config.n_workers)
+        ]
+
+        # Inherit from parent
         super().__init__(
             dataset=dataset,
             save_path=save_path,
-            format=format,
+            fmt=fmt,
+            workers=worker_kwargs,
+            logging_mode=logging_mode,
+            verbose=verbose,
         )
-        self.openai_config = openai_config
-        self.n_iter = n_iter
-        self.timeout = timeout
-        self.model = model
-        self.verbose = verbose
-        self.err_verbose = err_verbose
-
-        # Validate the paths
-        if not os.path.exists(self.openai_config):
-            raise ValueError(
-                "OpenAI configuration not found at "
-                f"{os.path.abspath(self.openai_config)}"
-            )
-
-        # Synchronization locks
-        self._tqdmlk = asyncio.Lock()  # For tqdm progress bar update
-        self._mloglk = asyncio.Lock()  # For writing log of model responses
-        self._mainlk = asyncio.Lock()  # For collecting data
 
     def _prompt(self, data_item: DataItemType) -> tuple[str, str]:
         """Return the prompt for evaluation.
@@ -373,10 +399,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         Parameters
         ----------
         data_item : DataItemType
-            The data item. If ``format="jsonl"``, this is one line of ``dataset``. If
-            ``format="json"``, this is one item of the json array loaded from
-            ``dataset``. If ``format="csv"``, this is one row of the
-            :class:`pandas.DataFrame` loaded from ``dataset``.
+            The data item.
 
         Returns
         -------
@@ -406,11 +429,6 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         that reply. It can extract either a single score or a dictionary of subject-
         score pairs.
 
-        This method should properly raise exceptions if the scores cannot be properly
-        extracted from the replies. This way the exceptions can be caught, and the
-        current data item will be considered a failure. Either it will be re-evaluated
-        in the following iterations, or it will be left unevaluated.
-
         Parameters
         ----------
         reply : str
@@ -424,273 +442,39 @@ class BaseOpenAIEvaluator(BaseEvaluator):
 
         Notes
         -----
-        This method is not implemented and must be overridden in subclasses.
+        This method is not implemented and must be overridden in subclasses. Moreover,
+        it is recommended *not* to catch the exceptions that cause the extraction of
+        scores to fail, since otherwise :meth:`BaseOpenAIEvaluator.evaluate` will not
+        realize that the data item errors out.
         """
         raise NotImplementedError
 
-    def evaluate(
-        self, *, overwrite: bool = False, skip_openai_api_cfm: bool = False
-    ) -> None:
-        """Evaluate the specified dataset.
-
-        Parameters
-        ----------
-        overwrite : bool, default=False
-            Whether to overwrite the data in ``save_path``. If ``False``, the
-            evaluation will be built upon existing data in ``save_path``, otherwise
-            all data will be evaluated are existing data will be overwritten.
-        skip_openai_api_cfm : bool, default=False
-            Whether to skip the confirmation message that notifies possible OpenAI API
-            usage. Set to ``True`` to silence the confirmation message. The default is
-            ``False`` just in case that someone is not aware.
-        """
-        openai_configs = get_openai_config(self.openai_config)
-        print(f"{len(openai_configs)} OpenAI keys detected:")
-        for openai_config in openai_configs:
-            print(openai_config)
-        if not skip_openai_api_cfm:
-            cfm = input(
-                "\033[93mThis message is to notify you that the method "
-                f"``{type(self).__name__}.evalute`` may consume OpenAI tokens of your "
-                "account(s). If you are aware of the possible consumption, press "
-                "Enter to continue. You can silence this confirmation message by "
-                "specifying ``skip_open_api_cfm=True``.\033[0m"
-            )
-            if cfm != "":
-                return
-
-        # Check if task is already completed
-        if overwrite:
-            self._df = pd.DataFrame(columns=["i"], dtype=pd.Int64Dtype)
-        self._yield_data_in_iteration = partial(self._yield_data, overwrite=overwrite)
-        if not list(self._yield_data_in_iteration()):
-            print("The evaluation has been fully completed.")
-            return
-
-        # Activate the main event loop
-        mlog_path = _manage_timed_logs("openai", keep=10)
-        for it in range(self.n_iter):
-            asyncio.run(
-                self._mainloop(
-                    it=it, mlog_path=mlog_path, openai_configs=openai_configs
-                )
-            )
-
-        # Write the latest updated DataFrame
-        print("Updating results...", end=" ", flush=True)
-        self._df.convert_dtypes().sort_values(by=["i"]).to_csv(
-            self.save_path, index=False
+    async def _aget_score(
+        self, data_item: DataItemType, **kwargs
+    ) -> Coroutine[Any, Any, Coroutine[Any, Any, Real | dict[Any, Real]]]:
+        sys_msg, eval_prompt = self._prompt(data_item)
+        messages = (
+            [
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": eval_prompt},
+            ]
+            if sys_msg
+            else [{"role": "user", "content": eval_prompt}]
         )
-        print(f"done, available at:\n{os.path.abspath(self.save_path)}")
 
-    async def _execute(
-        self,
-        *,
-        queue: asyncio.Queue[tuple[int, DataItemType]],
-        shared_resources: list[
-            tuple[int, dict[Any, Real], Literal[True]]
-            | tuple[int, DataItemType, Literal[False]]
-        ],
-        openai_config: OpenAIConfig,
-        mlog_path: str | Path,
-        progbar: tqdm,
-        it_id: int,
-        worker_id: int,
-        openai_api_id: int,
-    ) -> Coroutine[Any, Any, NoReturn]:
-        """Execution task processing a data item.
-
-        Parameters
-        ----------
-        queue : asyncio.Queue
-            The asynchronous queue held by the main event loop.
-        shared_resources : list
-            The shared resources for storing results.
-        openai_config : OpenAIConfig
-            The OpenAI configuration object used for the current query.
-        mlog_path : str or pathlib.Path
-            The path for the log of OpenAI model responses.
-        progbar : tqdm.tqdm
-            The progress bar for updating held by the main event loop.
-        it_id : int
-            The id of the current iteration.
-        worker_id : int
-            The id of the worker task.
-        openai_api_id : int
-            The id of the OpenAI API.
-        """
-        while True:
-            i, data_item = await queue.get()
-            sys_msg, eval_prompt = self._prompt(data_item)
-
-            # Query via OpenAI asynchronous API
-            reply: str | None
-            usage: dict | None
-            errmsg: str | None
-            messages = (
-                [
-                    {"role": "system", "content": sys_msg},
-                    {"role": "user", "content": eval_prompt},
-                ]
-                if sys_msg
-                else [{"role": "user", "content": eval_prompt}]
-            )
-            reply, usage, errmsg = await _openai_chatcompletion(
-                msgs=messages,
-                openai_config=openai_config,
-                timeout=self.timeout,
+        # Asynchronous query for OpenAI
+        completion = await asyncio.wait_for(
+            openai.ChatCompletion.acreate(
                 model=self.model,
-                err_verbose=self.err_verbose,
-            )
+                messages=messages,
+                api_key=kwargs["api_key"],
+                api_base=kwargs["api_base"],
+            ),
+            timeout=self.timeout,
+        )
 
-            # Try to extract the scores from the reply, otherwise store the error
-            eval_scores: dict[Any, Real] | None = None
-            formatted_err: str | None = None
-            mlog_item = {
-                "index": i,
-                "worker": worker_id,
-                "kwds": {"dataset": self.dataset, "save_path": self.save_path},
-                "api_id": openai_api_id,
-                "api_key": openai_config.key,
-                "reply": reply,
-                "usage": usage,
-                "errmsg": errmsg,
-            }
-            if errmsg is None:
-                try:
-                    scores = self._extract_scores(reply)
-                    eval_scores = self._check_scores(scores)
-                except Exception as e:
-                    formatted_err = type(e).__name__
-                    if self.err_verbose >= 2:
-                        mlog_item["errmsg"] = traceback.format_exc()
-                    elif self.err_verbose == 1:
-                        mlog_item["errmsg"] = f"{type(e).__name__}: {e}"
-                    else:
-                        mlog_item["errmsg"] = type(e).__name__
-            else:
-                formatted_err = "Model error, please check the log"
-
-            # Print to console depending on verbosity level
-            prefix = f"[{worker_id:03d}::{openai_api_id:03d} > Index.{i}, It.{it_id}]"
-            if eval_scores is not None and self.verbose >= 2:
-                scores_msg = " ".join(
-                    [f"\033[92m{k}\033[0m {v}" for k, v in eval_scores.items()]
-                )
-                async with self._tqdmlk:
-                    tqdm.write(f"{prefix:<30} {scores_msg}")
-            elif eval_scores is None and self.verbose >= 1:
-                async with self._tqdmlk:
-                    tqdm.write(f"{prefix:<30} \033[31m{formatted_err}\033[0m")
-
-            # Store the model response log
-            async with self._mloglk:
-                with open(mlog_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
-
-            # Collect the result, update progress bar, and mark task as done
-            async with self._tqdmlk:
-                progbar.update(1)
-            async with self._mainlk:
-                shared_resources.append(
-                    (i, eval_scores, True)
-                    if eval_scores is not None
-                    else (i, data_item, False)
-                )
-            queue.task_done()
-
-    async def _mainloop(
-        self,
-        *,
-        it: int,
-        mlog_path: str | Path,
-        openai_configs: list[OpenAIConfig],
-    ) -> Coroutine[Any, Any, None]:
-        """Main event loop for asynchronous querying.
-
-        Parameters
-        ----------
-        it : int
-            The id of the current iteration.
-        mlog_path : str or pathlib.Path
-            The path to the model response log.
-        openai_configs : list of OpenAIConfig
-            The OpenAI configurations.
-        """
-        queue: asyncio.Queue[tuple[int, DataItemType]] = asyncio.Queue()
-        n_items = 0
-        for item in self._yield_data_in_iteration():
-            queue.put_nowait(item)
-            n_items += 1
-        if n_items == 0:
-            print("The evaluation has been fully completed.")
-            return
-
-        # Create worker tasks to process the queue asychronously
-        print(f"### Iteration {it}")
-        wid = 0
-        tasks: list[asyncio.Task] = []
-        shared_resources: list[
-            tuple[int, dict[Any, Real], Literal[True]]
-            | tuple[int, DataItemType, Literal[False]]
-        ] = []
-        progbar = tqdm(total=n_items)
-        for openai_api_id, openai_config in enumerate(openai_configs):
-            for _ in range(int(openai_config.n_workers)):
-                tasks.append(
-                    asyncio.create_task(
-                        self._execute(
-                            queue=queue,
-                            shared_resources=shared_resources,
-                            openai_config=openai_config,
-                            mlog_path=mlog_path,
-                            progbar=progbar,
-                            it_id=it,
-                            worker_id=wid,
-                            openai_api_id=openai_api_id,
-                        )
-                    )
-                )
-                wid += 1
-        async with self._tqdmlk:
-            tqdm.write(f"{wid} workers utilized as configured for {n_items} data items")
-
-        # Wait until the queue is fully processed and collect the results
-        await queue.join()
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        progbar.close()
-
-        # Collect failed items (if exist) and print a brief summary
-        print("Collecting results...", end=" ", flush=True)
-        result_scores: dict[int, dict[Any, Real]] = {}
-        todo_items: list[tuple[int, DataItemType]] = []
-        for i, result, passed in shared_resources:
-            if passed:
-                result_scores[i] = result
-            else:
-                todo_items.append((i, result))
-        if todo_items:
-            print(f"\033[31m{len(todo_items)} failed\033[0m among all {n_items} items.")
-        else:
-            print(f"\033[92mall {n_items} items done.\033[0m")
-
-        # Update the obtained data but postpone writing
-        new_df = pd.DataFrame(result_scores).T.reset_index(names="i")
-        self._df = pd.concat([self._df, new_df])
-        missing_data = self._df.isna().any()
-        if missing_data.any():
-            warnings.warn(
-                "\033[93mUnexpected missing values detected in the columns "
-                f"{list(missing_data[missing_data].index)}\033[0m",
-                UserWarning,
-                stacklevel=2,
-            )
-
-        # Reset the yielding function
-        def yield_data_in_iteration():
-            for item in todo_items:
-                yield item
-
-        self._yield_data_in_iteration = yield_data_in_iteration
+        # Check whether the model has fully completed the response
+        finish_reason = completion["choices"][0]["finish_reason"]
+        if finish_reason != "stop":
+            raise ValueError(f"Model terminated by '{finish_reason}'")
+        return self._extract_scores(completion["choices"][0]["message"]["content"])

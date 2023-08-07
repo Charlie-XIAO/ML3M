@@ -1,9 +1,14 @@
-import os
+"""This file is for logging-relevant functionalities."""
+
+
 from datetime import datetime
+import os
+
+from ._paths import ensure_path
 
 
-def _manage_timed_logs(prefix, keep: int = 10):
-    """Clean old OpenAI logs and return the path to a new log.
+def manage_timed_logs(prefix, keep: int = 10):
+    """Clean old logs and return the path to a new log.
 
     Parameters
     ----------
@@ -18,8 +23,7 @@ def _manage_timed_logs(prefix, keep: int = 10):
         The absolute path to the new OpenAI log. Note that the log is not created yet.
     """
     base = os.path.join(os.path.dirname(__file__), "..", "logs")
-    if not os.path.exists(base):
-        os.makedirs(base)
+    ensure_path(base, is_directory=True)
     dtformat = "%Y-%m-%d-%H.%M.%S.%f"
     fnames = [
         fname

@@ -1,7 +1,8 @@
 import os
-from setuptools import setup, find_packages
 
-VERSION = "0.0.1"
+from setuptools import find_packages, setup
+
+VERSION = "0.0.2"
 DESCRIPTION = "Evaluting your LLM performance"
 
 dirname = os.path.dirname(__file__)
