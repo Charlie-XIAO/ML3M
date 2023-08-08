@@ -1,288 +1,245 @@
+import asyncio
+from datetime import datetime
 import json
 import os
 from pathlib import Path
-import shutil
 import traceback
-from typing import Callable, Generator
+from typing import Any, Callable, Coroutine, Generator
 
 import pandas as pd
-from tqdm import tqdm
 
+from .._async import AsyncRunner
+from .._color import COLOR, colored
 from .._logging import manage_timed_logs
-from .._typing import DataItemType, DatasetFormat
+from .._paths import ensure_path, validate_path
+from .._typing import DataItemType, DatasetFormat, LoggingMode
 
 
 class ResponseGenerator:
-    """Generate response and combine with the original dataset.
-
-    To use this generator, an original dataset of a set of inputs and expected
-    responses needs to prepared. In other words, it is similar to a training set.
-    The original dataset can take the following formats:
-
-    - ``.jsonl``: Each line will be read by :func:`json.loads`, either as a list or as
-      a dictionary. This is to be handled by ``query``.
-
-    - ``.json``: The whole file will be read by :func:`json.load`, and it should be a
-      json array (and read as a list). Each item in the list will be treated in the
-      same way as each line in the ``.jsonl`` format. It can be either a list or a
-      dictionary, to be handled by ``query``.
-
-    - ``.csv``: The whole file will be read by :func:`pandas.read_csv` as a
-      :class:`pandas.DataFrame`. Each row is to be handled by ``query``.
-
-    The resulting dataset expand the original dataset by including the actual model
-    responses. It will be in the same format as the original dataset. The rules are as
-    follows:
-
-    - ``.jsonl``: If each line is read as a list, this will turn that line into a
-      dictionary with the key "data" pointing to that list and the key specified by
-      ``response_name`` pointing to the corresponding response. If each line is read as
-      a dictionary, there will be an additional key specified by ``response_name`` with
-      value as the corresponding response. If that key already exists, an exception
-      will be raised.
-
-    - ``.json``: This follows the same rules as ``.jsonl``, with each line being each
-      item in the json array here.
-
-    - ``.csv``: This will add a column with its name specified by ``response_name``. If
-      that column name already exists, an exception will be raised.
+    """Generate responses and combine with the original dataset.
 
     Parameters
     ----------
     orig_dataset : str or pathlib.Path
         The absolute path to the original dataset.
-    dataset : str or pathlib.Path or None
-        The absolute path to the result dataset. If ``None``, ``orig_dataset`` will
-        be overwritten (but no original data will be lost; there will only be
-        additional information added).
-    query : Callable
+    dataset : str or pathlib.Path
+        The absolute path to the result dataset. All information in the original
+        dataset will be preserved while the responses will be appended.
+    query_func : Callable
         The function that queries a model given a data item and outputs the model
         response. The input parameter should be a :class:`pandas.Series`, a list, or a
         dictionary, depending on ``format``. The output should be a single string
         representing the model response.
-    format : {"jsonl", "json", "csv"}, default="jsonl"
-        The format of ``dataset``, as specified above.
-    response_name : str, default="response"
-        The key or column name to use for the response.
-    n_iter : int, default=3
-        The maximum number of iterations if OpenAI querying failed on any data item.
+    response_name : str
+        The key or column name to use for the response. This should *not* be a key or
+        column name that already exists in the dataset. Be extremely careful since
+        there will be *no* warning or exception raised on this.
+    fmt : {"jsonl", "json", "csv"}, default="jsonl"
+        The format of ``dataset``.
+    n_workers : int, default=1
+        The number of workers. If only one worker, the dataset will be processed
+        sequentially. Otherwise it will be asynchronously parallelized with the
+        specified number of workers.
+    logging_mode : {"all", "failed", "none"}, default="all"
+        The logging mode, whether to save the logs of all items, or only of failed
+        items, or save no log.
     verbose : int, default=1
-        The verbosity level of printout. For level 0, only a progress bar will be
-        displayed. For level 1, the errored queries will also be displayed. For level
-        higher than 2, all queries will be displayed. Regardless of the verbosity
-        level, the full log will be written, except that the verbosity of exceptions
-        will depend on ``err_verbose``.
-    err_verbose : int, default=1
-        The verbosity level of the error message when writing logs. For level 0, only
-        the exception type will be included. For level 1, the exception message will
-        also be included. For level higher than 2, the full stack trace will be
-        included. Regardless of the ``err_verbose``, verbosity level 0 will be used in
-        printout of error messages.
+        The verbosity level of the processing. For level 0, only a progress bar will be
+        displayed. For level 1, the errored items will also be displayed. For levels
+        higher than 2, all items will be displayed.
     """
 
     def __init__(
         self,
         orig_dataset: str | Path,
-        dataset: str | Path | None,
-        query: Callable[[DataItemType], str],
+        dataset: str | Path,
+        query_func: Callable[[DataItemType], str],
+        response_name: str,
         *,
-        format: DatasetFormat = "jsonl",
-        response_name: str = "response",
-        n_iter: int = 3,
+        fmt: DatasetFormat = "jsonl",
+        n_workers: int = 1,
+        logging_mode: LoggingMode = "all",
         verbose: int = 1,
-        err_verbose: int = 1,
     ) -> None:
         self.orig_dataset = orig_dataset
         self.dataset = dataset
-        self.query = query
-        self.format = format
+        self.query_func = query_func
+        self.fmt = fmt
         self.response_name = response_name
-        self.n_iter = n_iter
+        self.n_workers = n_workers
+        self.logging_mode = logging_mode
         self.verbose = verbose
-        self.err_verbose = err_verbose
 
-        # Validate the paths and format
-        if not os.path.exists(self.orig_dataset):
+        # Validate the arguments
+        validate_path(self.orig_dataset)
+        if not callable(self.query_func):
+            raise ValueError("query_func must be a callable.")
+        if self.fmt not in ["jsonl", "json", "csv"]:
             raise ValueError(
-                f"Original dataset not found at {os.path.abspath(self.orig_dataset)}"
+                f"Invalid fmt: '{self.fmt}'; must be one of 'jsonl', 'json', and "
+                "'csv'."
             )
-        if self.format not in ["jsonl", "json", "csv"]:
-            raise ValueError(f"Invalid format: {self.format}")
 
-    def _check_item(self, data: list):
-        """Check if each item of data is a list or dictionary.
+    def _yield_dataset(
+        self, overwrite: bool = False
+    ) -> Generator[tuple[int, DataItemType], Any, None]:
+        """Yield the indices and data items to be done.
 
-        Parameters
-        ----------
-        data : list
-            The list of data items.
-
-        Returns
-        -------
-        islist : bool
-            Whether the data items are lists.
+        Yield
+        -----
+        i : int
+            The index of the data item.
+        data_item : DataItemType
+            The data item.
         """
-        if all(isinstance(item, list) for item in data):
-            return True
-        elif all(isinstance(item, dict) for item in data):
-            return False
+        source: str | Path
+        using_dataset: bool = True
+
+        if not os.path.exists(self.dataset):
+            ensure_path(self.dataset)
+            source = self.orig_dataset
+            using_dataset = False
         else:
-            raise ValueError("Data has internally-inconsistent types.")
+            source = self.dataset
+
+        # Load the all data from the best source
+        self._all_data: list | pd.DataFrame
+        if self.fmt == "jsonl":
+            with open(source, "r", encoding="utf-8") as f:
+                self._all_data = [json.loads(line) for line in f]
+        elif self.fmt == "json":
+            with open(source, "r", encoding="utf-8") as f:
+                self._all_data = json.load(f)
+        else:  # self.fmt == "csv"
+            self._all_data = pd.read_csv(source)
+
+        # Yield the indices and corresponding data items
+        if using_dataset and not overwrite:
+            if self.fmt == "jsonl" or self.fmt == "json":
+                for i, data_item in enumerate(self._all_data):
+                    if self.response_name not in data_item or pd.isna(
+                        data_item[self.response_name]
+                    ):
+                        yield i, data_item
+            else:  # self.format == "csv"
+                if self.response_name not in self._all_data.columns:
+                    for i, data_item in self._all_data.iterrows():
+                        yield i, data_item
+                else:
+                    for i, data_item in self._all_data[
+                        self._all_data[self.response_name].isna()
+                    ].iterrows():
+                        yield i, data_item
+        else:
+            if self.fmt == "jsonl" or self.fmt == "json":
+                for i, data_item in enumerate(self._all_data):
+                    yield i, data_item
+            else:  # self.format == "csv"
+                for i, data_item in self._all_data.iterrows():
+                    yield i, data_item
 
     def generate(self, *, overwrite: bool = False) -> bool:
-        """Generate response and combine with the original dataset.
+        """Generate responses and combine with the original dataset.
 
         Parameters
         ----------
         overwrite : bool, default=False
-            Whether to overwrite the responses if some already exist. If
-            ``format="jsonl"`` or ``format="json"``, this will look for the
-            key specified by ``response_name`` in each item. If ``format="csv"``,
-            this will look for the column specified by ``response_name``.
+            Whether to overwrite the responses if some already exist, specified by
+            ``response_name``.
 
         Returns
         -------
         completed : bool
-            Whether the task has been fully completed.
+            Whether the task has been completed.
         """
-        completed: bool = False
-        if self.format not in ["jsonl", "json", "csv"]:
-            raise ValueError(f"Invalid format: {self.format}")
+        mlog_path = manage_timed_logs(prefix=type(self).__name__)
 
-        # Validate the destination path
-        manual_overwrite: bool = False
-        if self.dataset is not None and not os.path.exists(self.dataset):
-            abs_save_path = os.path.abspath(self.dataset)
-            print(
-                f"\033[93mSave path not found at {abs_save_path}; forcefully created"
-                "\033[0m",
-            )
-            directories, _ = os.path.split(abs_save_path)
-            if not os.path.exists(directories):
-                os.makedirs(directories)
-            shutil.copyfile(self.orig_dataset, self.dataset)
-            manual_overwrite = True
-        destination = self.orig_dataset if self.dataset is None else self.dataset
-        mlog_path = manage_timed_logs(prefix="model", keep=10)
+        async def process_func(
+            item: tuple[int, DataItemType],
+            addtlks: list[asyncio.Lock] | None = None,
+            **kwargs,
+        ) -> Coroutine[
+            Any, Any, tuple[tuple[int, str], str, None] | tuple[None, None, str]
+        ]:
+            """The process function required for the asynchronous runner."""
+            i, data_item = item
+            response: str | None = None
+            norm_msg: str | None = None
+            err: Exception | None = None
+            err_trace: str | None = None
 
-        for it in range(self.n_iter):
-            print(f"### Iteration {it}")
-            # Load the data and create the data iterator
-            data: list | pd.DataFrame
-            islist: bool = False
-            n_tot: int
-            datait: Generator[tuple[int, DataItemType], None, None]
-            if self.format in ["jsonl", "json"]:
-                with open(destination, "r", encoding="utf-8") as f:
-                    if self.format == "jsonl":
-                        data = [json.loads(line) for line in f]
-                    else:
-                        data = json.load(f)
-                islist = self._check_item(data)
-                if it != 0 or not (overwrite or manual_overwrite):
-                    if islist:
-                        raise ValueError(
-                            "``overwrite=False`` is not possible if data items are "
-                            "lists since it is vague where to look for the existing "
-                            "response."
-                        )
-                    elif any(self.response_name not in item for _, item in data):
-                        raise ValueError(
-                            "Some data items are missing the key "
-                            f"'{self.response_name}'"
-                        )
-                    else:
-                        datait = (
-                            (i, item)
-                            for i, item in enumerate(data)
-                            if pd.isna(item[self.response_name])
-                        )
-                        n_tot = sum(pd.isna(item[self.response_name] for item in data))
-                else:
-                    datait = ((i, item) for i, item in enumerate(data))
-                    n_tot = len(data)
-            elif self.format == "csv":
-                data = pd.read_csv(destination)
-                if it != 0 or not (overwrite or manual_overwrite):
-                    if self.response_name not in data.columns:
-                        raise ValueError(f"Missing column '{self.response_name}'")
-                    filtered_data = data[pd.isna(data[self.response_name])]
-                    datait = ((i, row) for i, row in filtered_data.iterrows())
-                    n_tot = len(filtered_data)
-                else:
-                    datait = ((i, row) for i, row in data.iterrows())
-                    n_tot = len(data)
+            # Handle all exceptions
+            try:
+                response = self.query_func(data_item)
+                norm_msg = f"Item.{i:<10} {response:.40s}"
+            except Exception as e:
+                err, err_trace = e, traceback.format_exc()
 
-            # Query each data item and update loaded data in-place
-            progbar, n_failed = tqdm(total=n_tot), 0
-            for i, data_item in datait:
-                response: str | None = None
-                errmsg: str | None = None
-                pmsg: str | None = None
-                try:
-                    response = self.query(data_item)
-                except Exception as e:
-                    if self.err_verbose >= 2:
-                        errmsg = traceback.format_exc()
-                    elif self.err_verbose == 1:
-                        errmsg = f"{type(e).__name__}: {e}"
-                    else:
-                        errmsg = type(e).__name__
-                    pmsg = type(e).__name__
-                    n_failed += 1
-
-                # Update the loaded data based on its format
-                if self.format in ["jsonl", "json"]:
-                    if islist:
-                        data[i] = {"data": data_item, self.response_name: response}
-                    elif self.response_name in data[i]:
-                        raise ValueError(f"{self.response_name} already exists")
-                    else:
-                        data[i][self.response_name] = response
-                elif self.format == "csv":
-                    data.at[i, self.response_name] = response
-
-                # Write the log and print information based on verbosity level
+            # Write the log on demand
+            if (
+                self.logging_mode == "failed"
+                and response is None
+                or self.logging_mode == "all"
+            ):
                 mlog_item = {
-                    "id": i,
-                    "kwds": {
-                        "orig_dataset": self.orig_dataset,
-                        "dataset": self.dataset,
-                    },
+                    "time": str(datetime.now()),
+                    "index": i,
                     "response": response,
-                    "errmsg": errmsg,
+                    "norm_msg": norm_msg,
+                    "err_msg": err_trace,
                 }
-                with open(mlog_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(mlog_item, ensure_ascii=False))
+                async with addtlks[0]:
+                    with open(mlog_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
 
-                # Printing information based on the verbosity level
-                prefix = f"[Index.{i}, It.{it}]"
-                if errmsg is None and self.verbose >= 2:
-                    tqdm.write(f"{prefix:<30} {response:.30s}...")
-                elif errmsg is not None and self.verbose >= 1:
-                    tqdm.write(f"{prefix:<30} \033[31m{pmsg}\033[0m")
-                progbar.update(1)
+            # Return the information based on success or failure
+            if response is not None:
+                return (i, response), norm_msg, None
+            return None, None, f"Item.{i:<10} {type(err).__name__}: {err!s:.30s}"
 
-            # Write the data (may be temporary)
-            progbar.close()
-            print("Writing data...", end=" ", flush=True)
-            if self.format in ["jsonl", "json"]:
-                with open(destination, "w", encoding="utf-8"):
-                    if self.format == "jsonl":
-                        for data_item in data:
-                            f.write(json.dumps(data_item, ensure_ascii=False))
-                    elif self.format == "json":
-                        json.dump(data, f, ensure_ascii=False, indent=4)
-            elif self.format == "csv":
-                data.to_csv(destination, index=False)
-            print(f"done, available at:\n{os.path.abspath(destination)}")
+        # Activate the asynchronous runner (sequential mode if only one worker)
+        runner = AsyncRunner(
+            items=self._yield_dataset(overwrite=overwrite),
+            worker_kwargs=[{} for _ in range(self.n_workers)],
+            process_func=process_func,
+            n_locks=1,
+            verbose=self.verbose,
+        )
+        results: list[tuple[int, str]]
+        results, failed = runner.run()
+        completed = len(failed) == 0
 
-            # Print execution summary
-            if n_failed == 0:
-                print("\033[92mAll items done.\033[0m")
-                completed = True
-                break
-            elif it != self.n_iter - 1:
-                manual_overwrite = False
-                print(f"\033[31m{n_failed} items failed, reiterating...\033[0m")
+        # Update the file with the obtained results; all items must be updated,
+        # including the failing ones, which should be marked as None
+        result_responses = dict(results)
+        if self.fmt == "jsonl" or self.fmt == "json":
+            for i, item in enumerate(self._all_data):  # list of dict or list of list
+                response = result_responses[i] if i in result_responses else None
+                if isinstance(item, dict):
+                    item[self.response_name] = response
+                elif isinstance(item, list):
+                    self._all_data[i] = {"data": item, self.response_name: response}
+                else:
+                    raise ValueError(
+                        f"Each data item must be a list or a dictionary; got '{item}' "
+                        f"of type '{type(item)}'."
+                    )
+            with open(self.dataset, "w", encoding="utf-8") as f:
+                if self.fmt == "jsonl":
+                    for data_item in self._all_data:
+                        f.write(json.dumps(data_item, ensure_ascii=False) + "\n")
+                else:  # self.fmt == "json"
+                    json.dump(self._all_data, f, ensure_ascii=False, indent=4)
+        else:  # self.fmt == "csv"
+            for i in self._all_data.index:  # pd.DataFrame
+                response = result_responses[i] if i in result_responses else None
+                self._all_data.at[i, self.response_name] = response
+            self._all_data.to_csv(self.dataset, index=False)
+
+        # Summarize the save location (and possibly log location)
+        print(colored("Dataset can be found at:", COLOR.GREEN))
+        print(os.path.abspath(self.dataset))
+        if self.logging_mode != "none":
+            print(colored("Execution log can be found at:", COLOR.GREEN))
+            print(os.path.abspath(os.path.abspath(mlog_path)))
         return completed

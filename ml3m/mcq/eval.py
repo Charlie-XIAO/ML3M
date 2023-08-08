@@ -20,7 +20,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         ``overwrite`` when using the ``evaluate`` method.
     openai_config : str or pathlib.Path
         The absolute path to the OpenAI configuration file.
-    info : Callable
+    info_func : Callable
         The function that extracts the question, actual answer, and expected answer of
         a data item (specifically, a multiple-choice question). The input parameter
         should be a :class:`pandas.Series`, a list, or a dictionary, depending on
@@ -46,26 +46,27 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
 
     Notes
     -----
-    Here are some examples of ``info``:
+    Here are some examples of ``info_func``:
 
     Assume that ``dataset`` is in ``.jsonl`` format and each line is of the following
     form: ``{{"instruction": "xxx", "input": "xxx", "output": "xxx", "history": [],
-    "response": "xxx"}}``. Then ``info`` can be defined as follows:
+    "response": "xxx"}}``. Then ``info_func`` can be defined as follows:
 
     .. code-block:: python
 
-        def info(data_item: dict) -> tuple[str, str, str]:
+        def info_func(data_item: dict) -> tuple[str, str, str]:
             question = data_item["instruction"] + "\\n" + data_item["input"]
             actual = data_item["response"]
             expected = data_item["output"]
             return question, actual, expected
 
     Now assume that ``dataset`` is in ``.csv`` format with columns "question", "A",
-    "B", "C", "D", "answer", and "response". Then ``info`` can be defined as follows:
+    "B", "C", "D", "answer", and "response". Then ``info_func`` can be defined as
+    follows:
 
     .. code-block:: python
 
-        def info(data_item: pandas.Series) -> tuple[str, str, str]:
+        def info_func(data_item: pandas.Series) -> tuple[str, str, str]:
             question, A, B, C, D, answer, response = data_item[
                 ["question", "A", "B", "C", "D", "answer", "response"]
             ]
@@ -80,7 +81,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         dataset: str | Path,
         save_path: str | Path,
         openai_config: str | Path,
-        info: Callable[[DataItemType], tuple[str, str, str]],
+        info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
         timeout: float = 60,
@@ -88,7 +89,9 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         logging_mode: LoggingMode = "all",
         verbose: int = 1,
     ) -> None:
-        self.info = info
+        self.info_func = info_func
+        if not callable(info_func):
+            raise ValueError("info_func must be a callable.")
 
         # Inherit from parent
         super().__init__(
@@ -104,7 +107,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
 
     def _prompt(self, data_item: DataItemType) -> tuple[str, str]:
         """:meta private:"""
-        question, actual, expected = self.info(data_item)
+        question, actual, expected = self.info_func(data_item)
         return (
             "",
             f"### As follows is a multiple-choice question:\n```\n{question}\n```\n\n"
@@ -127,5 +130,5 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
                 f"answer); got '{reply}' instead."
             )
 
-    def evaluate(self, *, overwrite: bool = False) -> None:
-        super().evaluate(overwrite=overwrite)
+    def evaluate(self, *, overwrite: bool = False) -> bool:
+        return super().evaluate(overwrite=overwrite)

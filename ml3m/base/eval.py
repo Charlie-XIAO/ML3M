@@ -4,6 +4,7 @@ import json
 from numbers import Real
 import os
 from pathlib import Path
+import traceback
 from typing import Any, Coroutine, Generator
 import warnings
 
@@ -21,9 +22,11 @@ from ..utils.openai import get_openai_config
 class BaseEvaluator:
     """Base evaluator class.
 
-    This class is meant to be subclassed. The methods that must be overridden include:
+    .. note ::
+        This class is meant to be subclassed. The methods that must be overridden
+        include:
 
-    - :meth:`BaseEvaluator._aget_score`
+        - :meth:`BaseEvaluator._aget_score`
 
     Parameters
     ----------
@@ -42,7 +45,8 @@ class BaseEvaluator:
         otherwise it will be asynchronously parallelized. If ``workers`` is a list of
         dictionaries, the length of this list will be considered the number of workers.
         Each dictionary should be the additional keyword arguments passed to
-        :meth:`BaseEvaluator._aget_score`.
+        :meth:`BaseEvaluator._aget_score`. Note that if ``workers`` is an integer, no
+        additional keyword arguments will be passed.
     logging_mode : {"all", "failed", "none"}, default="all"
         The logging mode, whether to save the logs of all items, or only of failed
         items, or save no log.
@@ -109,7 +113,7 @@ class BaseEvaluator:
         ----------
         data_item : DataItemType
             The data item.
-        **kwargs
+        kwargs
             The additional keyword arguments.
 
         Returns
@@ -228,7 +232,7 @@ class BaseEvaluator:
                 f"values; got '{scores}' of type '{type(scores)}' instead."
             )
 
-    def evaluate(self, *, overwrite: bool = False) -> None:
+    def evaluate(self, *, overwrite: bool = False) -> bool:
         """Evaluate the specified dataset.
 
         Parameters
@@ -237,20 +241,30 @@ class BaseEvaluator:
             Whether to overwrite the data in ``save_path``. If ``False``, the
             evaluation will be built upon existing data in ``save_path``, otherwise
             all data will be evaluated are existing data will be overwritten.
+
+        Returns
+        -------
+        completed : bool
+            Whether the task has been completed.
         """
         self._sync_save_path(overwrite=overwrite)
         mlog_path = manage_timed_logs(type(self).__name__)
-        result_scores: dict[int, dict[Any, Real]] = {}
 
         async def process_func(
             item: tuple[int, DataItemType],
             addtlks: list[asyncio.Lock] | None = None,
             **kwargs,
-        ) -> Coroutine[Any, Any, tuple[Any, str, str]]:
+        ) -> Coroutine[
+            Any,
+            Any,
+            tuple[tuple[int, dict[Any, Real]], str, None] | tuple[None, None, str],
+        ]:
+            """The process function required for the asynchronous runner."""
             i, data_item = item
             eval_scores: dict[Any, Real] | None = None
             norm_msg: str | None = None
-            err_msg: str | None = None
+            err: Exception | None = None
+            err_trace: str | None = None
 
             # Handle all exceptions
             try:
@@ -261,7 +275,7 @@ class BaseEvaluator:
                     f"{json.dumps(eval_scores, ensure_ascii=False):.40s}"
                 )
             except Exception as e:
-                err_msg = type(e).__name__
+                err, err_trace = e, traceback.format_exc()
 
             # Write the log on demand
             if (
@@ -274,16 +288,16 @@ class BaseEvaluator:
                     "index": i,
                     "eval_scores": eval_scores,
                     "norm_msg": norm_msg,
-                    "err_msg": err_msg,
+                    "err_msg": err_trace,
                 }
                 async with addtlks[0]:
                     with open(mlog_path, "a", encoding="utf-8") as f:
                         f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
-            return (
-                None if eval_scores is None else (i, eval_scores),
-                norm_msg,
-                f"Item.{i:<10} {err_msg}",
-            )
+
+            # Return the information based on success or failure
+            if eval_scores is not None:
+                return (i, eval_scores), norm_msg, None
+            return None, None, f"Item.{i:<10} {type(err).__name__}: {err!s:.30s}"
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(
@@ -293,11 +307,12 @@ class BaseEvaluator:
             n_locks=1,
             verbose=self.verbose,
         )
-        results, _ = runner.run()
-        for i, eval_scores in results:
-            result_scores[i] = eval_scores
+        results: list[tuple[int, dict[Any, Real]]]
+        results, failed = runner.run()
+        completed = len(failed) == 0
 
         # Update the file with the obtained results
+        result_scores = dict(results)
         new_df = pd.DataFrame(result_scores).T.reset_index(names="i")
         self._result_df = pd.concat([self._result_df, new_df])
         missing_data = self._result_df.isna().any()
@@ -318,15 +333,18 @@ class BaseEvaluator:
         if self.logging_mode != "none":
             print(colored("Execution log can be found at:", COLOR.GREEN))
             print(os.path.abspath(os.path.abspath(mlog_path)))
+        return completed
 
 
 class BaseOpenAIEvaluator(BaseEvaluator):
     """Base evaluator class via OpenAI.
 
-    This class is meant to be subclassed. The methods that must be overriden include:
+    .. note ::
+        This class is meant to be subclassed. The methods that must be overriden
+        include:
 
-    - :meth:`BaseOpenAIEvaluator._prompt`
-    - :meth:`BaseOpenAIEvaluator._extract_scores`
+        - :meth:`BaseOpenAIEvaluator._prompt`
+        - :meth:`BaseOpenAIEvaluator._extract_scores`
 
     Parameters
     ----------
@@ -452,6 +470,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
     async def _aget_score(
         self, data_item: DataItemType, **kwargs
     ) -> Coroutine[Any, Any, Coroutine[Any, Any, Real | dict[Any, Real]]]:
+        """:meta private:"""
         sys_msg, eval_prompt = self._prompt(data_item)
         messages = (
             [
@@ -478,3 +497,6 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         if finish_reason != "stop":
             raise ValueError(f"Model terminated by '{finish_reason}'")
         return self._extract_scores(completion["choices"][0]["message"]["content"])
+
+    def evaluate(self, *, overwrite: bool = False) -> bool:
+        return super().evaluate(overwrite=overwrite)
