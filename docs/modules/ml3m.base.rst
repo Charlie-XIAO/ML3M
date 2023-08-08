@@ -5,3 +5,4 @@ ml3m.base package
    :members:
    :undoc-members:
    :show-inheritance:
+   :inherited-members:

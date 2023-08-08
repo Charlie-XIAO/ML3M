@@ -6,7 +6,7 @@ import warnings
 from datetime import datetime
 from numbers import Real
 from pathlib import Path
-from typing import Any, Coroutine, Generator
+from typing import Any, Coroutine, Generator, Iterable
 
 import openai
 import pandas as pd
@@ -109,6 +109,9 @@ class BaseEvaluator:
 
         :meta public:
 
+        .. note ::
+            This method is not implemented and must be overridden in subclasses.
+
         Parameters
         ----------
         data_item : DataItemType
@@ -124,9 +127,8 @@ class BaseEvaluator:
 
         Notes
         -----
-        This method is not implemented and must be overridden in subclasses. Note that
-        this function must be defined as asynchronous, but it is okay that it does not
-        await for anything.
+        Note that if there are mutliple scores obtained, i.e., returning a dictionary,
+        remember that the "i" key cannot be included since it is reserved for indexing.
 
         Moreover, it is recommended *not* to catch the exceptions that cause the
         processing of a data item to fail, since otherwise
@@ -206,10 +208,14 @@ class BaseEvaluator:
         ------
         TypeError
             If ``scores`` is not a real number or a dictionary with real values.
+        ValueError
+            If the reserved "i" key exists in ``scores`` when it is a dictionary.
         """
         if isinstance(scores, Real) and not pd.isna(scores):
             return {"scores": scores}
         elif isinstance(scores, dict):
+            if "i" in scores:
+                raise ValueError("The 'i' key is reserved for indexing .")
             bad_item = next(
                 (
                     (subject, score)
@@ -335,6 +341,116 @@ class BaseEvaluator:
             print(os.path.abspath(os.path.abspath(mlog_path)))
         return completed
 
+    def load_scores(
+        self,
+        subject_subset: Iterable | None = None,
+        item_subset: Iterable | None = None,
+    ) -> pd.DataFrame:
+        """Load the scores from the save location.
+
+        Parameters
+        ----------
+        subject_subset : list or None
+            The subjects of the scores to select, i.e., the columns. If ``None``,
+            select all subjects.
+        item_subset : list or None
+            The indices of the items to select. If ``None``, select all items. This
+            will be applied after ``subject_subset``.
+
+        Returns
+        -------
+        scores : pandas.DataFrame
+            The scores loaded from ``save_path``.
+
+        Examples
+        --------
+        Suppose that the file at ``save_path`` looks like the following:
+
+        .. code-block ::
+
+            i,relevance,accuracy
+            0,78,83
+            1,64,76
+            2,100,92
+            3,28,38
+            4,30,45
+
+        >>> evaluator.load_scores()  # doctest: +SKIP
+           i  relevance  accuracy
+        0  0         78        83
+        1  1         64        76
+        2  2        100        92
+        3  3         28        38
+        4  4         30        45
+
+        >>> evaluator.load_scores(subject_subset=["relevance"])  # doctest: +SKIP
+           i  relevance
+        0  0         78
+        1  1         64
+        2  2        100
+        3  3         28
+        4  4         30
+
+        >>> evaluator.load_scores(item_subset=[1, 3])  # doctest: +SKIP
+           i  relevance  accuracy
+        1  1         64        76
+        3  3         28        38
+        """
+        result_df = pd.read_csv(self.save_path)
+        if subject_subset is not None:
+            result_df = result_df[["i", *subject_subset]]
+        if item_subset is not None:
+            result_df = result_df.loc[result_df["i"].isin(item_subset)]
+        return result_df
+
+    def load_avg_score(
+        self,
+        subject_subset: Iterable | None = None,
+        item_subset: Iterable | None = None,
+    ) -> dict[str, Real]:
+        """Load the average score of each subject from the save location.
+
+        Parameters
+        ----------
+        subject_subset : list or None
+            The subjects of the scores to select, i.e., the columns. If ``None``,
+            select all subjects.
+        item_subset : list or None
+            The indices of the items to select. If ``None``, select all items. This
+            will be applied after ``subject_subset``.
+
+        Returns
+        -------
+        avg_score : pandas.DataFrame
+            The average score loaded from ``save_path``.
+
+        Examples
+        --------
+        Suppose that the file at ``save_path`` looks like the following:
+
+        .. code-block ::
+
+            i,relevance,accuracy
+            0,78,83
+            1,64,76
+            2,100,92
+            3,28,38
+            4,30,45
+
+        >>> evaluator.load_avg_score()  # doctest: +SKIP
+        {'relevance': 60.0, 'accuracy': 66.8}
+
+        >>> evaluator.load_avg_score(subject_subset=["relevance"])  # doctest: +SKIP
+        {'relevance': 60.0}
+
+        >>> evaluator.load_avg_score(item_subset=[1, 3])  # doctest: +SKIP
+        {'relevance': 46.0, 'accuracy': 57.0}
+        """
+        result_df = self.load_scores(
+            subject_subset=subject_subset, item_subset=item_subset
+        )
+        return result_df.drop("i", axis=1).mean().to_dict()
+
 
 class BaseOpenAIEvaluator(BaseEvaluator):
     """Base evaluator class via OpenAI.
@@ -414,6 +530,9 @@ class BaseOpenAIEvaluator(BaseEvaluator):
 
         :meta public:
 
+        .. note ::
+            This method is not implemented and must be overridden in subclasses.
+
         Parameters
         ----------
         data_item : DataItemType
@@ -429,10 +548,6 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             for an example of system message.
         eval_prompt : str
             The formatted evaluation prompt.
-
-        Notes
-        -----
-        This method is not implemented and must be overridden in subclasses.
         """
         raise NotImplementedError
 
@@ -441,11 +556,8 @@ class BaseOpenAIEvaluator(BaseEvaluator):
 
         :meta public:
 
-        This method should correspond to the :meth:`BaseOpenAIEvaluator._prompt`
-        method, in the sense that the formatted evaluation prompt is expected to invoke
-        an *extractable* model reply, and this method should extract the score(s) from
-        that reply. It can extract either a single score or a dictionary of subject-
-        score pairs.
+        .. note ::
+            This method is not implemented and must be overridden in subclasses.
 
         Parameters
         ----------
@@ -460,8 +572,16 @@ class BaseOpenAIEvaluator(BaseEvaluator):
 
         Notes
         -----
-        This method is not implemented and must be overridden in subclasses. Moreover,
-        it is recommended *not* to catch the exceptions that cause the extraction of
+        This method should correspond to the :meth:`BaseOpenAIEvaluator._prompt`
+        method, in the sense that the formatted evaluation prompt is expected to invoke
+        an *extractable* model reply, and this method should extract the score(s) from
+        that reply. It can extract either a single score or a dictionary of subject-
+        score pairs.
+
+        Note that if there are mutliple scores obtained, i.e., returning a dictionary,
+        remember that the "i" key cannot be included since it is reserved for indexing.
+
+        It is recommended *not* to catch the exceptions that cause the extraction of
         scores to fail, since otherwise :meth:`BaseOpenAIEvaluator.evaluate` will not
         realize that the data item errors out.
         """
@@ -497,6 +617,3 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         if finish_reason != "stop":
             raise ValueError(f"Model terminated by '{finish_reason}'")
         return self._extract_scores(completion["choices"][0]["message"]["content"])
-
-    def evaluate(self, *, overwrite: bool = False) -> bool:
-        return super().evaluate(overwrite=overwrite)

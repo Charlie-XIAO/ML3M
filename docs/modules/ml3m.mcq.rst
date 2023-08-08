@@ -5,3 +5,4 @@ ml3m.mcq package
    :members:
    :undoc-members:
    :show-inheritance:
+   :inherited-members:

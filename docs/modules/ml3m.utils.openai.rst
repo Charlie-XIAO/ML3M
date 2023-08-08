@@ -5,3 +5,4 @@ ml3m.utils.openai package
    :members:
    :undoc-members:
    :show-inheritance:
+   :inherited-members:

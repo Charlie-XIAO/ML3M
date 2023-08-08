@@ -129,6 +129,3 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
                 "The expected OpenAI response is 0 (incorrect answer) or 1 (correct "
                 f"answer); got '{reply}' instead."
             )
-
-    def evaluate(self, *, overwrite: bool = False) -> bool:
-        return super().evaluate(overwrite=overwrite)
