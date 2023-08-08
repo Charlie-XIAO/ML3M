@@ -1,8 +1,8 @@
 """This file is for (possibly) printing colored text to terminal."""
 
 
-from enum import Enum
 import sys
+from enum import Enum
 from typing import Any
 
 

@@ -1,8 +1,8 @@
 """This file is for logging-relevant functionalities."""
 
 
-from datetime import datetime
 import os
+from datetime import datetime
 
 from ._paths import ensure_path
 
