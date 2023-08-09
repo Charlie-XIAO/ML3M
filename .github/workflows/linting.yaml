@@ -24,9 +24,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pre-commit
+          pip install pre-commit mypy
           pre-commit install
 
       - name: Run pre-commit
         run: |
-          pre-commit run --all-files
+          pre-commit run --all-files --verbose

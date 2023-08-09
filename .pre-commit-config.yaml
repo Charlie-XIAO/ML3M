@@ -7,7 +7,7 @@ repos:
     rev: v0.0.282
     hooks:
       - id: ruff
-        args: ["--fix", "--show-fixes", "--show-source"]
+        args: ["--fix", "--show-fixes"]
   - repo: local
     hooks:
       - id: mypy
