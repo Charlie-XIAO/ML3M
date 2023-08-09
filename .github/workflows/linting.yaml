@@ -29,4 +29,10 @@ jobs:
 
       - name: Run pre-commit
         run: |
-          pre-commit run --all-files --verbose
+          if [[ "${{ matrix.python-version }}" == "3.7" ||
+                "${{ matrix.python-version }}" == "3.8" ||
+                "${{ matrix.python-version }}" == "3.9" ]]; then
+            SKIP=mypy pre-commit run --all-files --verbose
+          else
+            pre-commit run --all-files --verbose
+          fi

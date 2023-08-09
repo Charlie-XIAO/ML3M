@@ -76,5 +76,8 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = "setuptools"
+module = [
+    "openai",
+    "setuptools",
+]
 ignore_missing_imports = true
