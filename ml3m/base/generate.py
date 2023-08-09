@@ -239,7 +239,7 @@ class ResponseGenerator:
         # Summarize the save location (and possibly log location)
         print(colored("Dataset can be found at:", COLOR.GREEN))
         print(os.path.abspath(self.dataset))
-        if self.logging_mode != "none":
+        if self.logging_mode != "none" and os.path.exists(mlog_path):
             print(colored("Execution log can be found at:", COLOR.GREEN))
             print(os.path.abspath(os.path.abspath(mlog_path)))
         return completed

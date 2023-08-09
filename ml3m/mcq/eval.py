@@ -9,6 +9,10 @@ from ..base.eval import BaseOpenAIEvaluator
 class McqOpenAIEvaluator(BaseOpenAIEvaluator):
     """Evaluator for multiple-choice questions via OpenAI.
 
+    This evaluator utilizes the ability of OpenAI models to tell if a response selects
+    the correct options, based on the reference answer. The score for each data item
+    would be either 0 or 100, and there will be no partial credits.
+
     Parameters
     ----------
     dataset : str or pathlib.Path
@@ -17,7 +21,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         The absolute path to the save location. This path may or may not exist, and if
         it exists, its file contents will be treated as a (partially) written result.
         Whether to overwrite the existing results or to build on them depend on
-        ``overwrite`` when using the ``evaluate`` method.
+        ``overwrite`` when using the :meth:`McqOpenAIEvaluator.evaluate` method.
     openai_config : str or pathlib.Path
         The absolute path to the OpenAI configuration file.
     info_func : Callable
@@ -29,6 +33,9 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         question. See the notes for examples.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
+    n_iter : int, default=1
+        The number of iterations for each data item. The mode of the scores for each
+        data item will be taken as the final score.
     timeout : float, default=60
         The timeout in seconds. This is not the OpenAI timeout, but the timeout for
         cancelling the worker tasks.
@@ -84,6 +91,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
+        n_iter: int = 1,
         timeout: float = 60,
         model: str = "gpt-3.5-turbo",
         logging_mode: LoggingMode = "all",
@@ -99,6 +107,8 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
             save_path=save_path,
             openai_config=openai_config,
             fmt=fmt,
+            n_iter=n_iter,
+            agg_method="mode",
             timeout=timeout,
             model=model,
             logging_mode=logging_mode,

@@ -93,6 +93,7 @@ class AsyncRunner:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        self.progbar.close()
 
     async def _worker(self, worker_id: int, **kwargs) -> Coroutine[Any, Any, NoReturn]:
         """The worker for processing the asynchronous queue.
@@ -155,7 +156,7 @@ class AsyncRunner:
                     (True, result) if result is not None else (False, item)
                 )
                 self.progbar.update(1)
-        self.progbar.close()
+            self.progbar.close()
 
         # Collect finished results and failed items
         print("Collecting results...", end=" ", flush=True)

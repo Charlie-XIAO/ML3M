@@ -15,7 +15,7 @@ from .._async import AsyncRunner
 from .._color import COLOR, colored
 from .._logging import manage_timed_logs
 from .._paths import ensure_path, validate_path
-from .._typing import DataItemType, DatasetFormat, LoggingMode
+from .._typing import AggregateMethod, DataItemType, DatasetFormat, LoggingMode
 from ..utils.openai import get_openai_config
 
 
@@ -36,7 +36,7 @@ class BaseEvaluator:
         The absolute path to the save location. This path may or may not exist, and if
         it exists, its file contents will be treated as a (partially) written result.
         Whether to overwrite the existing results or to build on them depend on
-        ``overwrite`` when using the ``evaluate`` method.
+        ``overwrite`` when using the :meth:`BaseEvaluator.evaluate` method.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
     workers : int or list of dict, default=1
@@ -47,6 +47,13 @@ class BaseEvaluator:
         Each dictionary should be the additional keyword arguments passed to
         :meth:`BaseEvaluator._aget_score`. Note that if ``workers`` is an integer, no
         additional keyword arguments will be passed.
+    n_iter : int, default=1
+        The number of iterations for each data item. This is commonly used when one
+        round of scoring is not convincing enough and the final scoring should be some
+        statistics of multiple rounds of scoring.
+    agg_method : {"mean", "sum", "min", "max", "mode"}, default=None
+        The aggregate method to use on multiple rounds of scoring. Ignored when
+        ``n_iter=1``, and otherwise this must not be ``None``.
     logging_mode : {"all", "failed", "none"}, default="all"
         The logging mode, whether to save the logs of all items, or only of failed
         items, or save no log.
@@ -63,6 +70,8 @@ class BaseEvaluator:
         *,
         fmt: DatasetFormat = "jsonl",
         workers: int | list[dict] = 1,
+        n_iter: int = 1,
+        agg_method: AggregateMethod | None = None,
         logging_mode: LoggingMode = "all",
         verbose: int = 1,
     ) -> None:
@@ -70,6 +79,8 @@ class BaseEvaluator:
         self.save_path = save_path
         self.fmt = fmt
         self.workers = workers
+        self.n_iter = n_iter
+        self.agg_method = agg_method
         self.logging_mode = logging_mode
         self.verbose = verbose
 
@@ -85,8 +96,17 @@ class BaseEvaluator:
                 f"Invalid logging_mode: '{self.logging_mode}'; must be one of 'all', "
                 "'failed', and 'none'."
             )
+        if self.n_iter < 1:
+            raise ValueError(
+                f"Invalid n_iter: '{self.n_iter}'; must be an integer >= 1."
+            )
+        if n_iter >= 1 and self.agg_method not in ["mean", "sum", "min", "max", "mode"]:
+            raise ValueError(
+                f"Invalid agg_method: '{self.agg_method}'; must be one of 'mean', "
+                "'sum', 'min', 'max', and 'mode'."
+            )
 
-        # Load the key arguments for workers
+        # Load the keyword arguments for workers
         self._worker_kwargs: list[dict]
         if isinstance(self.workers, int):
             if self.workers < 1:
@@ -157,13 +177,15 @@ class BaseEvaluator:
 
     def _yield_dataset(
         self, overwrite: bool = False
-    ) -> Generator[tuple[int, DataItemType], Any, None]:
+    ) -> Generator[tuple[int, int, DataItemType], Any, None]:
         """Yield the indices and data items to be done.
 
         Yield
         -----
         i : int
             The index of the data item.
+        it : int
+            The iteration id of the data item, should be range(0, self.n_iter).
         data_item : DataItemType
             The data item.
         """
@@ -176,18 +198,21 @@ class BaseEvaluator:
             with open(self.dataset, "r", encoding="utf-8") as f:
                 for i, line in enumerate(f):
                     if i not in existing_indices:
-                        yield i, json.loads(line)
+                        for it in range(self.n_iter):
+                            yield i, it, json.loads(line)
         elif self.fmt == "json":
             with open(self.dataset, "r", encoding="utf-8") as f:
                 all_data = json.load(f)
             for i, item in enumerate(all_data):
                 if i not in existing_indices:
-                    yield i, item
+                    for it in range(self.n_iter):
+                        yield i, it, item
         else:  # self.fmt == "csv"
             all_data = pd.read_csv(self.dataset)
             for i, row in all_data.iterrows():
                 if i not in existing_indices:
-                    yield i, row
+                    for it in range(self.n_iter):
+                        yield i, it, row
 
     def _check_scores(self, scores: Real | dict[Any, Real]) -> dict[Any, Real]:
         """Check and format the scores.
@@ -263,10 +288,11 @@ class BaseEvaluator:
         ) -> Coroutine[
             Any,
             Any,
-            tuple[tuple[int, dict[Any, Real]], str, None] | tuple[None, None, str],
+            tuple[tuple[int, int, dict[Any, Real]], str, None] | tuple[None, None, str],
         ]:
             """The process function required for the asynchronous runner."""
-            i, data_item = item
+            i, it, data_item = item
+            prefix = f"Item.{i}" if self.n_iter == 1 else f"Item/Iter.{i}/{it}"
             eval_scores: dict[Any, Real] | None = None
             norm_msg: str | None = None
             err: Exception | None = None
@@ -277,8 +303,7 @@ class BaseEvaluator:
                 scores = await self._aget_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
                 norm_msg = (
-                    f"Item.{i:<10} "
-                    f"{json.dumps(eval_scores, ensure_ascii=False):.40s}"
+                    f"{prefix:<20} {json.dumps(eval_scores, ensure_ascii=False):.40s}"
                 )
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
@@ -292,6 +317,7 @@ class BaseEvaluator:
                 mlog_item = {
                     "time": str(datetime.now()),
                     "index": i,
+                    "iter": it,
                     "eval_scores": eval_scores,
                     "norm_msg": norm_msg,
                     "err_msg": err_trace,
@@ -302,8 +328,8 @@ class BaseEvaluator:
 
             # Return the information based on success or failure
             if eval_scores is not None:
-                return (i, eval_scores), norm_msg, None
-            return None, None, f"Item.{i:<10} {type(err).__name__}: {err!s:.30s}"
+                return (i, it, eval_scores), norm_msg, None
+            return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(
@@ -313,13 +339,25 @@ class BaseEvaluator:
             n_locks=1,
             verbose=self.verbose,
         )
-        results: list[tuple[int, dict[Any, Real]]]
+        results: list[tuple[int, int, dict[Any, Real]]]
         results, failed = runner.run()
         completed = len(failed) == 0
 
+        # Aggregate the result if needed
+        new_df: pd.DataFrame
+        if self.n_iter == 1:
+            result_scores = {i: scores for i, _, scores in results}
+            new_df = pd.DataFrame(result_scores).T
+        else:
+            result_scores = {(i, it): scores for i, it, scores in results}
+            grp = pd.DataFrame(result_scores).T.groupby(level=0)
+            if self.agg_method in ["mean", "sum", "min", "max"]:
+                new_df = grp.agg(self.agg_method)
+            else:  # self.agg_method == "mode":
+                new_df = grp.apply(lambda x: x.mode().iloc[0])
+        new_df = new_df.reset_index(names="i")
+
         # Update the file with the obtained results
-        result_scores = dict(results)
-        new_df = pd.DataFrame(result_scores).T.reset_index(names="i")
         self._result_df = pd.concat([self._result_df, new_df])
         missing_data = self._result_df.isna().any()
         if missing_data.any():
@@ -336,7 +374,7 @@ class BaseEvaluator:
         # Summarize the save location (and possibly log location)
         print(colored("Results can be found at:", COLOR.GREEN))
         print(os.path.abspath(self.save_path))
-        if self.logging_mode != "none":
+        if self.logging_mode != "none" and os.path.exists(mlog_path):
             print(colored("Execution log can be found at:", COLOR.GREEN))
             print(os.path.abspath(os.path.abspath(mlog_path)))
         return completed
@@ -470,18 +508,25 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         The absolute path to the save location. This path may or may not exist, and if
         it exists, its file contents will be treated as a (partially) written result.
         Whether to overwrite the existing results or to build on them depend on
-        ``overwrite`` when using the ``evaluate`` method.
+        ``overwrite`` when using the :meth:`BaseOpenAIEvaluator.evaluate` method.
     openai_config : str or pathlib.Path
         The absolute path to the OpenAI configuration file.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
+    n_iter : int, default=1
+        The number of iterations for each data item. This is commonly used when one
+        round of scoring is not convincing enough and the final scoring should be some
+        statistics of multiple rounds of scoring.
+    agg_method : {"mean", "sum", "min", "max", "mode"}, default=None
+        The aggregate method to use on multiple rounds of scoring. Ignored when
+        ``n_iter=1``, and otherwise this must not be ``None``.
     timeout : float, default=60
         The timeout in seconds. This is not the OpenAI timeout, but the timeout for
         cancelling the worker tasks.
     model : str, default="gpt-3.5-turbo"
         The ID of the model to use, must be one of the available OpenAI models that
         support the ChatCompletion API. See also
-        https://platform.openai.com/docs/models/model-endpoint-compatibility
+        https://platform.openai.com/docs/models/model-endpoint-compatibility.
     logging_mode : {"all", "failed", "none"}, default="all"
         The logging mode, whether to save the logs of all items, or only of failed
         items, or save no log.
@@ -489,6 +534,12 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         The verbosity level of the processing. For level 0, only a progress bar will be
         displayed. For level 1, the errored items will also be displayed. For levels
         higher than 2, all items will be displayed.
+    openai_kwargs
+        The additional keyword arguments to pass to OpenAI ChatCompletion. See the
+        arguments marked as *Optional* at
+        https://platform.openai.com/docs/api-reference/chat/create. Do not try to pass
+        ``api_key`` and ``api_base`` through ``openai_kwargs``, use a configuration
+        file instead.
     """
 
     def __init__(
@@ -498,14 +549,18 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         openai_config: str | Path,
         *,
         fmt: DatasetFormat = "jsonl",
+        n_iter: int = 1,
+        agg_method: AggregateMethod | None = None,
         timeout: float = 60,
         model: str = "gpt-3.5-turbo",
         logging_mode: LoggingMode = "all",
         verbose: int = 1,
+        **openai_kwargs,
     ) -> None:
         self.openai_config = openai_config
         self.timeout = timeout
         self.model = model
+        self.openai_kwargs = openai_kwargs
 
         # Load the OpenAI configurations
         validate_path(self.openai_config)
@@ -514,6 +569,10 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             for config in get_openai_config(self.openai_config)
             for _ in range(config.n_workers)
         ]
+        if "api_key" in self.openai_kwargs:
+            self.openai_kwargs.pop("api_key")
+        if "api_base" in self.openai_kwargs:
+            self.openai_kwargs.pop("api_base")
 
         # Inherit from parent
         super().__init__(
@@ -521,6 +580,8 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             save_path=save_path,
             fmt=fmt,
             workers=worker_kwargs,
+            n_iter=n_iter,
+            agg_method=agg_method,
             logging_mode=logging_mode,
             verbose=verbose,
         )
@@ -608,6 +669,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
                 messages=messages,
                 api_key=kwargs["api_key"],
                 api_base=kwargs["api_base"],
+                **self.openai_kwargs,
             ),
             timeout=self.timeout,
         )
