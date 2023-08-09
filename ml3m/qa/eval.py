@@ -95,7 +95,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
             return question, response, answer
     """
 
-    pattern = re.compile(r"```[a-z]*\n(.+)\n```")
+    _pattern = re.compile(r"```[a-z]*\n(.+)\n```")
 
     def __init__(
         self,
@@ -194,7 +194,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
             }
         # Try to search for a code block in the reply; if errored, leave as is
         except:
-            match = re.search(self.pattern, reply)
+            match = re.search(self._pattern, reply)
             assert match is not None
             scores = {
                 subject.lower(): score
