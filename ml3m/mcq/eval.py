@@ -131,9 +131,11 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         """:meta private:"""
         stripped_reply = reply.strip()
         if stripped_reply == "1":
-            return 100
+            # mypy not working with numbers.Real
+            return 100  # type: ignore[return-value]
         elif stripped_reply == "0":
-            return 0
+            # mypy not working with numbers.Real
+            return 0  # type: ignore[return-value]
         else:
             raise ValueError(
                 "The expected OpenAI response is 0 (incorrect answer) or 1 (correct "

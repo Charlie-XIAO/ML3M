@@ -4,7 +4,7 @@ import os
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Coroutine, Generator
+from typing import Any, Callable, Generator
 
 import pandas as pd
 
@@ -122,11 +122,17 @@ class ResponseGenerator:
                     ):
                         yield i, data_item
             else:  # self.format == "csv"
+                assert isinstance(self._all_data, pd.DataFrame)
                 if self.response_name not in self._all_data.columns:
-                    for i, data_item in self._all_data.iterrows():
+                    # pd.DataFrame index is Hashable | None, must asserting we get int
+                    for (  # type: ignore[assignment]
+                        i,
+                        data_item,
+                    ) in self._all_data.iterrows():
                         yield i, data_item
                 else:
-                    for i, data_item in self._all_data[
+                    # pd.DataFrame index is Hashable | None, must asserting we get int
+                    for i, data_item in self._all_data[  # type: ignore[assignment]
                         self._all_data[self.response_name].isna()
                     ].iterrows():
                         yield i, data_item
@@ -135,7 +141,12 @@ class ResponseGenerator:
                 for i, data_item in enumerate(self._all_data):
                     yield i, data_item
             else:  # self.format == "csv"
-                for i, data_item in self._all_data.iterrows():
+                assert isinstance(self._all_data, pd.DataFrame)
+                # pd.DataFrame index is Hashable | None, must asserting we get int
+                for (  # type: ignore[assignment]
+                    i,
+                    data_item,
+                ) in self._all_data.iterrows():
                     yield i, data_item
 
     def generate(self, *, overwrite: bool = False) -> bool:
@@ -158,9 +169,7 @@ class ResponseGenerator:
             item: tuple[int, DataItemType],
             addtlks: list[asyncio.Lock] | None = None,
             **kwargs,
-        ) -> Coroutine[
-            Any, Any, tuple[tuple[int, str], str, None] | tuple[None, None, str]
-        ]:
+        ) -> tuple[tuple[int, str], str, None] | tuple[None, None, str]:
             """The process function required for the asynchronous runner."""
             i, data_item = item
             response: str | None = None
@@ -188,12 +197,13 @@ class ResponseGenerator:
                     "norm_msg": norm_msg,
                     "err_msg": err_trace,
                 }
+                assert isinstance(addtlks, list)
                 async with addtlks[0]:
                     with open(mlog_path, "a", encoding="utf-8") as f:
                         f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
 
             # Return the information based on success or failure
-            if response is not None:
+            if response is not None and norm_msg is not None:
                 return (i, response), norm_msg, None
             return None, None, f"Item.{i:<10} {type(err).__name__}: {err!s:.30s}"
 
@@ -231,7 +241,8 @@ class ResponseGenerator:
                 else:  # self.fmt == "json"
                     json.dump(self._all_data, f, ensure_ascii=False, indent=4)
         else:  # self.fmt == "csv"
-            for i in self._all_data.index:  # pd.DataFrame
+            assert isinstance(self._all_data, pd.DataFrame)
+            for i in self._all_data.index:
                 response = result_responses[i] if i in result_responses else None
                 self._all_data.at[i, self.response_name] = response
             self._all_data.to_csv(self.dataset, index=False)

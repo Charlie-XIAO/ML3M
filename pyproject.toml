@@ -64,3 +64,13 @@ exclude = [
     "docs",
     "logs",
 ]
+
+[tool.mypy]
+exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    "docs",
+    "logs",
+]

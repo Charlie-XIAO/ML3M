@@ -3,7 +3,7 @@
 
 import asyncio
 from inspect import _ParameterKind, signature
-from typing import Any, Awaitable, Callable, Coroutine, Iterable, NoReturn
+from typing import Any, Callable, Iterable, NoReturn
 
 from tqdm import tqdm
 
@@ -41,7 +41,7 @@ class AsyncRunner:
         self,
         items: Iterable,
         worker_kwargs: list[dict[str, Any]],
-        process_func: Callable[..., Awaitable[tuple[Any, str, str]]],
+        process_func: Callable,
         n_locks: int = 0,
         verbose: int = 1,
     ):
@@ -66,9 +66,9 @@ class AsyncRunner:
         ):
             raise ValueError("process_func must accept **kwargs.")
 
-    async def _mainloop(self) -> Coroutine[Any, Any, None]:
+    async def _mainloop(self) -> None:
         """Main event loop for asynchronous parallelization."""
-        self.queue = asyncio.Queue()
+        self.queue: asyncio.Queue[Any] = asyncio.Queue()
         n_items = 0
         for item in self.items:
             self.queue.put_nowait(item)
@@ -95,7 +95,7 @@ class AsyncRunner:
         await asyncio.gather(*tasks, return_exceptions=True)
         self.progbar.close()
 
-    async def _worker(self, worker_id: int, **kwargs) -> Coroutine[Any, Any, NoReturn]:
+    async def _worker(self, worker_id: int, **kwargs) -> NoReturn:
         """The worker for processing the asynchronous queue.
 
         Parameters
@@ -145,6 +145,9 @@ class AsyncRunner:
             print(f"Running in sequential mode for {len(all_items)} items...")
             self.progbar = tqdm(total=len(all_items))
             for item in all_items:
+                result: Any
+                norm_msg: str
+                err_msg: str
                 result, norm_msg, err_msg = asyncio.run(
                     self.process_func(item, **self.worker_kwargs[0])
                 )

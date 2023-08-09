@@ -6,7 +6,7 @@ import warnings
 from datetime import datetime
 from numbers import Real
 from pathlib import Path
-from typing import Any, Coroutine, Generator, Iterable
+from typing import Any, Generator, Iterable
 
 import openai
 import pandas as pd
@@ -124,7 +124,7 @@ class BaseEvaluator:
 
     async def _aget_score(
         self, data_item: DataItemType, **kwargs
-    ) -> Coroutine[Any, Any, Real | dict[Any, Real]]:
+    ) -> Real | dict[Any, Real]:
         """Evaluate a data item and obtain its score(s).
 
         :meta public:
@@ -141,7 +141,7 @@ class BaseEvaluator:
 
         Returns
         -------
-        scores : numbers.Real or dict
+        scores : real or dict
             The evaluated scores, either a single score or a dictionary of subject-
             score pairs.
 
@@ -219,7 +219,7 @@ class BaseEvaluator:
 
         Parameters
         ----------
-        scores : Real or dict
+        scores : real or dict
             The evaluation scores of a data item, either a single real number of a
             dictionary of subject-score pairs.
 
@@ -236,16 +236,23 @@ class BaseEvaluator:
         ValueError
             If the reserved "i" key exists in ``scores`` when it is a dictionary.
         """
-        if isinstance(scores, Real) and not pd.isna(scores):
+        # mypy not working with numbers.Real
+        if isinstance(scores, Real) and not pd.isna(
+            scores
+        ):  # type: ignore[call-overload]
             return {"scores": scores}
         elif isinstance(scores, dict):
             if "i" in scores:
                 raise ValueError("The 'i' key is reserved for indexing .")
+            # mypy not working with numbers.Real
             bad_item = next(
                 (
                     (subject, score)
                     for subject, score in scores.items()
-                    if not isinstance(score, Real) or pd.isna(score)
+                    if (
+                        not isinstance(score, Real)
+                        or pd.isna(score)  # type: ignore[call-overload]
+                    )
                 ),
                 None,
             )
@@ -282,13 +289,11 @@ class BaseEvaluator:
         mlog_path = manage_timed_logs(type(self).__name__)
 
         async def process_func(
-            item: tuple[int, DataItemType],
+            item: tuple[int, int, DataItemType],
             addtlks: list[asyncio.Lock] | None = None,
             **kwargs,
-        ) -> Coroutine[
-            Any,
-            Any,
-            tuple[tuple[int, int, dict[Any, Real]], str, None] | tuple[None, None, str],
+        ) -> tuple[tuple[int, int, dict[Any, Real]], str, None] | tuple[
+            None, None, str
         ]:
             """The process function required for the asynchronous runner."""
             i, it, data_item = item
@@ -322,12 +327,13 @@ class BaseEvaluator:
                     "norm_msg": norm_msg,
                     "err_msg": err_trace,
                 }
+                assert isinstance(addtlks, list)
                 async with addtlks[0]:
                     with open(mlog_path, "a", encoding="utf-8") as f:
                         f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
 
             # Return the information based on success or failure
-            if eval_scores is not None:
+            if eval_scores is not None and norm_msg is not None:
                 return (i, it, eval_scores), norm_msg, None
             return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
 
@@ -346,15 +352,18 @@ class BaseEvaluator:
         # Aggregate the result if needed
         new_df: pd.DataFrame
         if self.n_iter == 1:
-            result_scores = {i: scores for i, _, scores in results}
-            new_df = pd.DataFrame(result_scores).T
+            i2scores = {i: scores for i, _, scores in results}
+            new_df = pd.DataFrame(i2scores).T
         else:
-            result_scores = {(i, it): scores for i, it, scores in results}
-            grp = pd.DataFrame(result_scores).T.groupby(level=0)
+            iit2scores = {(i, it): scores for i, it, scores in results}
+            grp = pd.DataFrame(iit2scores).T.groupby(level=0)
             if self.agg_method in ["mean", "sum", "min", "max"]:
                 new_df = grp.agg(self.agg_method)
             else:  # self.agg_method == "mode":
-                new_df = grp.apply(lambda x: x.mode().iloc[0])
+                # TODO: maybe resolve: error: "Iterable[Any]" has no attribute "mode"
+                new_df = grp.apply(
+                    lambda x: x.mode().iloc[0]  # type: ignore[attr-defined]
+                )
         new_df = new_df.reset_index(names="i")
 
         # Update the file with the obtained results
@@ -627,7 +636,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
 
         Returns
         -------
-        scores : numbers.Real or dict
+        scores : real or dict
             The extracted scores, either a single score or a dictionary of subject-
             score pairs.
 
@@ -650,7 +659,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
 
     async def _aget_score(
         self, data_item: DataItemType, **kwargs
-    ) -> Coroutine[Any, Any, Coroutine[Any, Any, Real | dict[Any, Real]]]:
+    ) -> Real | dict[Any, Real]:
         """:meta private:"""
         sys_msg, eval_prompt = self._prompt(data_item)
         messages = (
