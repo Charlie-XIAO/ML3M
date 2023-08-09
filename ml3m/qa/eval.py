@@ -34,7 +34,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         The absolute path to the save location. This path may or may not exist, and if
         it exists, its file contents will be treated as a (partially) written result.
         Whether to overwrite the existing results or to build on them depend on
-        ``overwrite`` when using the :meth:`McqOpenAIEvaluator.evaluate` method.
+        ``overwrite`` when using the :meth:`QaOpenAIEvaluator.evaluate` method.
     openai_config : str or pathlib.Path
         The absolute path to the OpenAI configuration file.
     info_func : Callable
