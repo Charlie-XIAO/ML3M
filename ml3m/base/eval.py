@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import os
@@ -5,8 +7,7 @@ import traceback
 import warnings
 from datetime import datetime
 from numbers import Real
-from pathlib import Path
-from typing import Any, Generator, Iterable
+from typing import TYPE_CHECKING, Any, Generator, Iterable
 
 import openai
 import pandas as pd
@@ -15,8 +16,12 @@ from .._async import AsyncRunner
 from .._color import COLOR, colored
 from .._logging import manage_timed_logs
 from .._paths import ensure_path, validate_path
-from .._typing import AggregateMethod, DataItemType, DatasetFormat, LoggingMode
 from ..utils.openai import get_openai_config
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .._typing import AggregateMethod, DataItemType, DatasetFormat, LoggingMode
 
 
 class BaseEvaluator:

@@ -1,5 +1,7 @@
 """This file is for convenient typing."""
 
+from __future__ import annotations
+
 from typing import Literal
 
 import pandas as pd

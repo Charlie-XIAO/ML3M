@@ -1,9 +1,14 @@
-from numbers import Real
-from pathlib import Path
-from typing import Any, Callable
+from __future__ import annotations
 
-from .._typing import DataItemType, DatasetFormat, LoggingMode
+from typing import TYPE_CHECKING, Any, Callable
+
 from ..base.eval import BaseOpenAIEvaluator
+
+if TYPE_CHECKING:
+    from numbers import Real
+    from pathlib import Path
+
+    from .._typing import DataItemType, DatasetFormat, LoggingMode
 
 
 class McqOpenAIEvaluator(BaseOpenAIEvaluator):

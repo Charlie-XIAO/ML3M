@@ -15,3 +15,11 @@ repos:
         entry: mypy
         language: system
         types: [python]
+      - id: future-annotations
+        name: future-annotations
+        entry: 'from __future__ import annotations'
+        language: pygrep
+        args: [--negate]
+        files: ^ml3m/
+        types: [python]
+        exclude: \b__init__\.py$

@@ -1,4 +1,7 @@
-"""This file is for docstring-relevant functionalities"""
+"""This file is for docstring-relevant functionalities."""
+
+
+from __future__ import annotations
 
 
 def format_docstring(**kwargs):

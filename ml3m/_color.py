@@ -1,6 +1,8 @@
 """This file is for (possibly) printing colored text to terminal."""
 
 
+from __future__ import annotations
+
 import sys
 from enum import Enum
 from typing import Any

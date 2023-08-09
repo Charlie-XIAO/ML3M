@@ -1,10 +1,10 @@
-import asyncio
+from __future__ import annotations
+
 import json
 import os
 import traceback
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Callable, Generator
+from typing import TYPE_CHECKING, Any, Callable, Generator
 
 import pandas as pd
 
@@ -12,7 +12,12 @@ from .._async import AsyncRunner
 from .._color import COLOR, colored
 from .._logging import manage_timed_logs
 from .._paths import ensure_path, validate_path
-from .._typing import DataItemType, DatasetFormat, LoggingMode
+
+if TYPE_CHECKING:
+    import asyncio
+    from pathlib import Path
+
+    from .._typing import DataItemType, DatasetFormat, LoggingMode
 
 
 class ResponseGenerator:

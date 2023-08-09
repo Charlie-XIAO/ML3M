@@ -1,8 +1,13 @@
 """This file is for path-related functionalities."""
 
 
+from __future__ import annotations
+
 import os
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def ensure_path(path: str | Path, is_directory=False) -> str:

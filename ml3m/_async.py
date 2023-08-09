@@ -1,6 +1,8 @@
 """This file is for asynchronous parallelization functionalities."""
 
 
+from __future__ import annotations
+
 import asyncio
 from inspect import _ParameterKind, signature
 from typing import Any, Callable, Iterable, NoReturn

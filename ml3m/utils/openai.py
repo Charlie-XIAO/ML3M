@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 import json
 import os
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class _OpenAIConfig:
