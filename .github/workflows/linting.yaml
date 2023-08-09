@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pre-commit mypy
+          pip install pre-commit mypy types-tqdm pandas-stubs
           pre-commit install
 
       - name: Run pre-commit
