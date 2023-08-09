@@ -6,7 +6,8 @@ from typing import Literal
 
 import pandas as pd
 
+AggregateMethod = Literal["mean", "sum", "min", "max", "mode"]
 DataItemType = pd.Series | list | dict
 DatasetFormat = Literal["jsonl", "json", "csv"]
 LoggingMode = Literal["all", "failed", "none"]
-AggregateMethod = Literal["mean", "sum", "min", "max", "mode"]
+QaSubject = Literal["accuracy", "completeness", "clarity"]

@@ -33,11 +33,14 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         The function that extracts the question, actual answer, and expected answer of
         a data item (specifically, a multiple-choice question). The input parameter
         should be a :class:`pandas.Series`, a list, or a dictionary, depending on
-        ``fmt``. The output should be a tuple of three strings, respectively the
-        question, the actual answer to that question, and the expected answer of that
-        question. See the notes for examples.
+        ``fmt`` and the specific type of each data item. The output should be a tuple
+        of three strings, respectively the question, the actual answer to that question,
+        and the expected answer of that question. See the notes for examples.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
+    setting: str, optional
+        The personality setting for the OpenAI model, passed as the system message. If
+        ``None``, then no system message is used.
     n_iter : int, default=1
         The number of iterations for each data item. The mode of the scores for each
         data item will be taken as the final score.
@@ -96,6 +99,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
+        setting: str | None = None,
         n_iter: int = 1,
         timeout: float = 60,
         model: str = "gpt-3.5-turbo",
@@ -103,8 +107,11 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         verbose: int = 1,
     ) -> None:
         self.info_func = info_func
-        if not callable(info_func):
-            raise ValueError("info_func must be a callable.")
+        self.setting = setting
+
+        # Validate the arguments
+        if not callable(self.info_func):
+            raise ValueError("Invalid info_func; must be a callable.")
 
         # Inherit from parent
         super().__init__(
@@ -124,7 +131,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         """:meta private:"""
         question, actual, expected = self.info_func(data_item)
         return (
-            "",
+            "" if self.setting is None else self.setting,
             f"### As follows is a multiple-choice question:\n```\n{question}\n```\n\n"
             f"### The correct answer to this question is: {actual}\n\n### My answer "
             f"to this question is:\n```\n{expected}\n```\n\nIf my answer is correct, "

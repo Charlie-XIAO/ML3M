@@ -6,4 +6,5 @@ ml3m
 
    modules/ml3m.base
    modules/ml3m.mcq
+   modules/ml3m.qa
    modules/ml3m.utils.openai

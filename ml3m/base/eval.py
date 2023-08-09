@@ -7,7 +7,7 @@ import traceback
 import warnings
 from datetime import datetime
 from numbers import Real
-from typing import TYPE_CHECKING, Any, Generator, Iterable
+from typing import TYPE_CHECKING, Any, Generator, Sequence
 
 import openai
 import pandas as pd
@@ -395,8 +395,8 @@ class BaseEvaluator:
 
     def load_scores(
         self,
-        subject_subset: Iterable | None = None,
-        item_subset: Iterable | None = None,
+        subject_subset: Sequence | None = None,
+        item_subset: Sequence | None = None,
     ) -> pd.DataFrame:
         """Load the scores from the save location.
 
@@ -457,8 +457,8 @@ class BaseEvaluator:
 
     def load_avg_score(
         self,
-        subject_subset: Iterable | None = None,
-        item_subset: Iterable | None = None,
+        subject_subset: Sequence | None = None,
+        item_subset: Sequence | None = None,
     ) -> dict[str, Real]:
         """Load the average score of each subject from the save location.
 
