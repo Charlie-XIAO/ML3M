@@ -25,5 +25,7 @@ repos:
         exclude: |
           (?x)^(
             .*/__init__\.py|
+            ml3m/_docstring.py|
+            ml3m/_emoji.py|
             ml3m/_version.py
           )

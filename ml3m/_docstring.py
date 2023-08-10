@@ -1,9 +1,6 @@
 """This file is for docstring-relevant functionalities."""
 
 
-from __future__ import annotations
-
-
 def format_docstring(**kwargs):
     """Decorator that formats the docstring with specified keywords.
 

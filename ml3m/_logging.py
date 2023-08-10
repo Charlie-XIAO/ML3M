@@ -9,7 +9,7 @@ from datetime import datetime
 from ._paths import ensure_path
 
 
-def manage_timed_logs(prefix, keep: int = 3):
+def manage_timed_logs(prefix, keep: int = 3) -> str:
     """Clean old logs and return the path to a new log.
 
     Parameters
