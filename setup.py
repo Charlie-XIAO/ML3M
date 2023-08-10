@@ -2,7 +2,9 @@ import os
 
 from setuptools import find_packages, setup
 
-VERSION = "0.0.3.dev"
+import ml3m
+
+VERSION = ml3m.__version__
 DESCRIPTION = "Evaluting your LLM performance"
 
 dirname = os.path.dirname(__file__)

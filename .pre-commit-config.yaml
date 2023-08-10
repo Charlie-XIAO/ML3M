@@ -22,4 +22,8 @@ repos:
         args: [--negate]
         files: ^ml3m/
         types: [python]
-        exclude: \b__init__\.py$
+        exclude: |
+          (?x)^(
+            .*/__init__\.py|
+            ml3m/_version.py
+          )
