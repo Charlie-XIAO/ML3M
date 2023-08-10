@@ -216,7 +216,7 @@ class QaMetricEvaluator(BaseEvaluator):
     This evaluator supports using the following metric to compare the actual response
     with the reference answer:
 
-    - BLEU-k (BiLingual Evaluation Understudy)
+    - `BLEU-k <https://en.wikipedia.org/wiki/BLEU>`_ (BiLingual Evaluation Understudy)
 
     Parameters
     ----------
