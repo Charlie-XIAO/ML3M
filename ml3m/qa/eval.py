@@ -4,7 +4,8 @@ import json
 import re
 from typing import TYPE_CHECKING, Any, Callable, Sequence
 
-from ..base.eval import BaseOpenAIEvaluator
+from .._metrics import bleu
+from ..base.eval import BaseEvaluator, BaseOpenAIEvaluator
 
 if TYPE_CHECKING:
     from numbers import Real
@@ -115,40 +116,35 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
     ) -> None:
         self.info_func = info_func
         self.setting = setting
-        self.subjects = subjects
+
+        # Determine the subjects
+        avail_subjects: list[QaSubject] = ["accuracy", "completeness", "clarity"]
+        self.subjects = avail_subjects if subjects is None else subjects
 
         # Validate the arguments
         if not callable(self.info_func):
             raise ValueError("Invalid info_func; must be a callable.")
-
-        # Set the actual subjects
-        self._subjects: list[QaSubject]
-        avail_subjects: list[QaSubject] = ["accuracy", "completeness", "clarity"]
-        if self.subjects is None:
-            self._subjects = avail_subjects
-        elif any(subject not in avail_subjects for subject in self.subjects) or len(
+        if any(subject not in avail_subjects for subject in self.subjects) or len(
             self.subjects
         ) != len(set(self.subjects)):
             raise ValueError(
                 f"Invalid subjects: {self.subjects}; must be a sequence of non-"
                 f"duplicated subjects among {avail_subjects}."
             )
-        else:
-            self._subjects = list(self.subjects)
 
         # Set the subject explanations
         self.explanations: list[str] = []
-        if "accuracy" in self._subjects:
+        if "accuracy" in self.subjects:
             self.explanations.append(
                 "accuracy: Using the reference answer as the ground truth, does my "
                 "answer include factually incorrect information?"
             )
-        if "completeness" in self._subjects:
+        if "completeness" in self.subjects:
             self.explanations.append(
                 "completeness: Compared with the reference answer, is my answer "
                 "missing details?"
             )
-        if "clarity" in self._subjects:
+        if "clarity" in self.subjects:
             self.explanations.append(
                 "clarity: Is my answer well-organized and clearly presented? If "
                 "accuracy and completeness is bad, clarity should also be bad."
@@ -172,7 +168,10 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         """:meta private:"""
         question, actual, expected = self.info_func(data_item)
         explanation_expr = "\n".join(
-            [f"{i}. {explanation}" for i, explanation in enumerate(self.explanations)]
+            [
+                f"{i + 1}. {explanation}"
+                for i, explanation in enumerate(self.explanations)
+            ]
         )
         return (
             "" if self.setting is None else self.setting,
@@ -203,9 +202,112 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
 
         # Raise if required subjects are missing
         obtained_subjects = set(scores)
-        if set(obtained_subjects) != set(self._subjects):
+        if set(obtained_subjects) != set(self.subjects):
             raise ValueError(
                 "The obtained subjects does not match the required ones; required "
-                f"{self._subjects}; got {obtained_subjects}."
+                f"{self.subjects}; got {obtained_subjects}."
             )
         return scores
+
+
+class QaMetricEvaluator(BaseEvaluator):
+    """Evaluator for question-answering via common metrics.
+
+    This evaluator supports using the following metric to compare the actual response
+    with the reference answer:
+
+    - BLEU-k (BiLingual Evaluation Understudy)
+
+    Parameters
+    ----------
+    dataset : str or pathlib.Path
+        The absolute path to the evaluation dataset.
+    save_path : str or pathlib.Path
+        The absolute path to the save location. This path may or may not exist, and if
+        it exists, its file contents will be treated as a (partially) written result.
+        Whether to overwrite the existing results or to build on them depend on
+        ``overwrite`` when using the :meth:`QaMetricEvaluator.evaluate` method.
+    info_func : Callable
+        The function that extracts the actual answer and expected answer of a data
+        item. The input parameter should be a :class:`pandas.Series`, a list, or a
+        dictionary, depending on ``fmt`` and the specific type of each data item. The
+        output should be a tuple of three strings, respectively the question, the actual
+        answer to that question, and the expected answer of that question. See the notes
+        for examples.
+    fmt : {"jsonl", "json", "csv"}, default="jsonl"
+        The format of ``dataset``.
+    bleu_k : list of int or None
+        The list of k-values used for BLEU-k. Must be positive. If ``None``, use k-
+        values 1 to 4.
+    logging_mode : {"all", "failed", "none"}, default="all"
+        The logging mode, whether to save the logs of all items, or only of failed
+        items, or save no log.
+    verbose : int, default=1
+        The verbosity level of the processing. For level 0, only a progress bar will be
+        displayed. For level 1, the errored items will also be displayed. For levels
+        higher than 2, all items will be displayed.
+
+    Notes
+    -----
+    Here are some examples of ``info_func``:
+
+    Assume that ``dataset`` is in ``.jsonl`` format and each line is of the following
+    form: ``{{"instruction": "xxx", "input": "xxx", "output": "xxx", "history": [],
+    "response": "xxx"}}``. Then ``info_func`` can be defined as follows:
+
+    .. code-block:: python
+
+        def info_func(data_item: dict) -> tuple[str, str]:
+            actual = data_item["response"]
+            expected = data_item["output"]
+            return question, actual, expected
+
+    Now assume that ``dataset`` is in ``.csv`` format with columns "question",
+    "answer", and "response". Then ``info_func`` can be defined as follows:
+
+    .. code-block:: python
+
+        def info_func(data_item: pandas.Series) -> tuple[str, str]:
+            answer, response = data_item[["answer", "response"]]
+            return response, answer
+    """
+
+    def __init__(
+        self,
+        dataset: str | Path,
+        save_path: str | Path,
+        info_func: Callable[[DataItemType], tuple[str, str]],
+        *,
+        fmt: DatasetFormat = "jsonl",
+        bleu_k: list[int] | None = None,
+        logging_mode: LoggingMode = "all",
+        verbose: int = 1,
+    ) -> None:
+        self.info_func = info_func
+        self.bleu_k = [1, 2, 3, 4] if bleu_k is None else bleu_k
+
+        # Inherit from parent
+        super().__init__(
+            dataset=dataset,
+            save_path=save_path,
+            fmt=fmt,
+            workers=1,
+            n_iter=1,
+            agg_method=None,
+            logging_mode=logging_mode,
+            verbose=verbose,
+        )
+
+    async def _aget_score(
+        self, data_item: DataItemType, **kwargs
+    ) -> Real | dict[Any, Real]:
+        """:meta private:"""
+        actual, expected = self.info_func(data_item)
+        scores = {}
+
+        # Compute the desired BLEU scores
+        for k, bleu_score in zip(self.bleu_k, bleu(actual, expected, self.bleu_k)):
+            scores[f"BLEU-{k}"] = bleu_score
+
+        # mypy not working with numbers.Real
+        return scores  # type: ignore[return-value]

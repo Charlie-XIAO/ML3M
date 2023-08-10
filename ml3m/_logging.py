@@ -9,14 +9,14 @@ from datetime import datetime
 from ._paths import ensure_path
 
 
-def manage_timed_logs(prefix, keep: int = 10):
+def manage_timed_logs(prefix, keep: int = 3):
     """Clean old logs and return the path to a new log.
 
     Parameters
     ----------
     prefix : str
         The prefix to the log.
-    keep : int, default=10
+    keep : int, default=3
         The number of logs to keep.
 
     Returns
