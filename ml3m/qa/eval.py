@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from .._metrics import bleu
 from ..base.eval import BaseEvaluator, BaseOpenAIEvaluator
+from ..errors import InvalidParameterError
 
 if TYPE_CHECKING:
     from numbers import Real
@@ -47,8 +48,8 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         for examples.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
-    subjects : list of {"accuracy", "completeness", "clarity"}, optional
-        The subjects to evaluate. If ``None``, evaluate all available subjects.
+    aspects : list of {"accuracy", "completeness", "clarity"}, optional
+        The aspects to evaluate. If ``None``, evaluate all available aspects.
     setting: str, optional
         The personality setting for the OpenAI model, passed as the system message. If
         ``None``, then no system message is used.
@@ -106,7 +107,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
-        subjects: Sequence[QaSubject] | None = None,
+        aspects: Sequence[QaSubject] | None = None,
         setting: str | None = None,
         n_iter: int = 3,
         timeout: float = 60,
@@ -117,35 +118,41 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         self.info_func = info_func
         self.setting = setting
 
-        # Determine the subjects
-        avail_subjects: list[QaSubject] = ["accuracy", "completeness", "clarity"]
-        self.subjects = avail_subjects if subjects is None else subjects
+        # Determine the aspects to evaluate on
+        avail_aspects: list[QaSubject] = ["accuracy", "completeness", "clarity"]
+        self.aspects = avail_aspects if aspects is None else aspects
 
         # Validate the arguments
         if not callable(self.info_func):
-            raise ValueError("Invalid info_func; must be a callable.")
-        if any(subject not in avail_subjects for subject in self.subjects) or len(
-            self.subjects
-        ) != len(set(self.subjects)):
-            raise ValueError(
-                f"Invalid subjects: {self.subjects}; must be a sequence of non-"
-                f"duplicated subjects among {avail_subjects}."
+            raise InvalidParameterError(
+                "info_func", actual=self.info_func, reason="must be a callable"
+            )
+        if any(subject not in avail_aspects for subject in self.aspects) or len(
+            self.aspects
+        ) != len(set(self.aspects)):
+            raise InvalidParameterError(
+                "aspects",
+                actual=self.aspects,
+                reason=(
+                    "must be a sequence of non-duplicated aspects among "
+                    f"{avail_aspects}"
+                ),
             )
 
         # Set the subject explanations
-        self.explanations: list[str] = []
-        if "accuracy" in self.subjects:
-            self.explanations.append(
+        self._explanations: list[str] = []
+        if "accuracy" in self.aspects:
+            self._explanations.append(
                 "accuracy: Using the reference answer as the ground truth, does my "
                 "answer include factually incorrect information?"
             )
-        if "completeness" in self.subjects:
-            self.explanations.append(
+        if "completeness" in self.aspects:
+            self._explanations.append(
                 "completeness: Compared with the reference answer, is my answer "
                 "missing details?"
             )
-        if "clarity" in self.subjects:
-            self.explanations.append(
+        if "clarity" in self.aspects:
+            self._explanations.append(
                 "clarity: Is my answer well-organized and clearly presented? If "
                 "accuracy and completeness is bad, clarity should also be bad."
             )
@@ -154,6 +161,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         super().__init__(
             dataset=dataset,
             save_path=save_path,
+            subjects=self.aspects,
             openai_config=openai_config,
             fmt=fmt,
             n_iter=n_iter,
@@ -170,7 +178,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         explanation_expr = "\n".join(
             [
                 f"{i + 1}. {explanation}"
-                for i, explanation in enumerate(self.explanations)
+                for i, explanation in enumerate(self._explanations)
             ]
         )
         return (
@@ -191,6 +199,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
             scores = {
                 subject.lower(): score for subject, score in json.loads(reply).items()
             }
+
         # Try to search for a code block in the reply; if errored, leave as is
         except:
             match = re.search(self._pattern, reply)
@@ -199,14 +208,6 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
                 subject.lower(): score
                 for subject, score in json.loads(match.group(1)).items()
             }
-
-        # Raise if required subjects are missing
-        obtained_subjects = set(scores)
-        if set(obtained_subjects) != set(self.subjects):
-            raise ValueError(
-                "The obtained subjects does not match the required ones; required "
-                f"{self.subjects}; got {obtained_subjects}."
-            )
         return scores
 
 
@@ -286,10 +287,21 @@ class QaMetricEvaluator(BaseEvaluator):
         self.info_func = info_func
         self.bleu_k = [1, 2, 3, 4] if bleu_k is None else bleu_k
 
+        # Validate the arguments
+        if not isinstance(self.bleu_k, list) or any(
+            not isinstance(k, int) or k <= 0 for k in self.bleu_k
+        ):
+            raise InvalidParameterError(
+                "bleu_k",
+                actual=self.bleu_k,
+                reason="must be a list of positive integers",
+            )
+
         # Inherit from parent
         super().__init__(
             dataset=dataset,
             save_path=save_path,
+            subjects=[f"BLEU-{k}" for k in self.bleu_k],
             fmt=fmt,
             workers=1,
             n_iter=1,

@@ -24,6 +24,7 @@ repos:
         types: [python]
         exclude: |
           (?x)^(
+            ml3m/tests/.*|
             .*/__init__\.py|
             ml3m/_docstring.py|
             ml3m/_emoji.py|

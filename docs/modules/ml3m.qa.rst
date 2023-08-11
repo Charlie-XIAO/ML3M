@@ -1,5 +1,5 @@
-ml3m.qa package
-================
+ml3m.qa: Question Answering
+===========================
 
 .. automodule:: ml3m.qa
    :members:

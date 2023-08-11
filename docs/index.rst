@@ -10,26 +10,26 @@ Welcome to ml3m's documentation!
    This package is still under development. Please do not use yet.
 
 
-Module Contents
----------------
+.. toctree::
+   :maxdepth: 1
+   :caption: Getting Started
+
+   basics/installation
+
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: API Reference
 
-   modules
+   ml3m.base <modules/ml3m.base>
+   ml3m.errors <modules/ml3m.errors>
+   ml3m.mcq <modules/ml3m.mcq>
+   ml3m.qa <modules/ml3m.qa>
+   ml3m.utils.openai <modules/ml3m.utils.openai>
 
-
-Usage Examples
---------------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: Usage Examples
 
    examples
-
-
-Indices and Tables
-------------------
-
-- :ref:`genindex`
-- :ref:`modindex`

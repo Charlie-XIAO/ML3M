@@ -1,5 +1,5 @@
-ml3m.mcq package
-================
+ml3m.mcq: Multiple Choice Questions
+===================================
 
 .. automodule:: ml3m.mcq
    :members:

@@ -13,22 +13,26 @@ def show_versions():
 
     # Adapted from the scikit-learn implementation
     print()
-    print(f"Welcome to ml3m {__version__}")
+    welcome_msg = f"Welcome to ml3m {__version__}"
+    print(welcome_msg)
+    print("=" * len(welcome_msg))
 
     # Print system related information
     print()
     print(colored("System Information", COLOR.GREEN))
-    print(f"Python         {platform.python_version()} {platform.python_build()}")
-    print(f"Compiler       {platform.python_compiler()}")
-    print(f"Executable     {sys.executable}")
-    print(f"Machine        {platform.platform()}")
+    pyver, (pybuildno, pybuilddt) = platform.python_version(), platform.python_build()
+    print(f"Python       {pyver} ({pybuildno}, {pybuilddt})")
+    print(f"Compiler     {platform.python_compiler()}")
+    print(f"Executable   {sys.executable}")
+    print(f"Machine      {platform.platform()}")
 
     # Print python dependencies
     print()
     print(colored("Python dependencies", COLOR.GREEN))
-    for package in ["pip", "setuptools", "numpy", "openai", "pandas", "tqdm"]:
+    packages = ["pip", "setuptools", "numpy", "openai", "pandas", "tqdm"]
+    for package in packages:
         try:
             package_ver = version(package)
         except PackageNotFoundError:
             package_ver = None
-        print(f"{package:<15}{package_ver}")
+        print(f"{package:<13}{package_ver}")

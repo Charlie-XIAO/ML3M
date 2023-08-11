@@ -4,10 +4,9 @@ import asyncio
 import json
 import os
 import traceback
-import warnings
 from datetime import datetime
 from numbers import Real
-from typing import TYPE_CHECKING, Any, Generator, Sequence
+from typing import TYPE_CHECKING, Any, Generator, Hashable, Sequence
 
 import openai
 import pandas as pd
@@ -16,6 +15,7 @@ from .._async import AsyncRunner
 from .._color import COLOR, colored
 from .._logging import manage_timed_logs
 from .._paths import ensure_path, validate_path
+from ..errors import InvalidParameterError, ScoringError
 from ..utils.openai import get_openai_config
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 class BaseEvaluator:
     """Base evaluator class.
 
-    .. note ::
+    .. note::
         This class is meant to be subclassed. The methods that must be overridden
         include:
 
@@ -42,6 +42,14 @@ class BaseEvaluator:
         it exists, its file contents will be treated as a (partially) written result.
         Whether to overwrite the existing results or to build on them depend on
         ``overwrite`` when using the :meth:`BaseEvaluator.evaluate` method.
+    subjects : list
+        The subjects to evaluate. This should *strictly* correspond to how to scores
+        are obtained in :meth:`BaseEvaluator._aget_score`. If the score is obtained as
+        a single real value, ``subjects`` must be a list of one element and that
+        element will be used as the name of that score. If the score(s) are obtained as
+        a dictionary of subject-value pairs, all items in ``subjects`` must appear as
+        the keys of the obtained dictionary. Any additional key will be discarded; any
+        missing key will be treated as an error.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
     workers : int or list of dict, default=1
@@ -72,6 +80,7 @@ class BaseEvaluator:
         self,
         dataset: str | Path,
         save_path: str | Path,
+        subjects: Sequence[Hashable],
         *,
         fmt: DatasetFormat = "jsonl",
         workers: int | list[dict] = 1,
@@ -82,6 +91,7 @@ class BaseEvaluator:
     ) -> None:
         self.dataset = dataset
         self.save_path = save_path
+        self.subjects = subjects
         self.fmt = fmt
         self.workers = workers
         self.n_iter = n_iter
@@ -91,39 +101,58 @@ class BaseEvaluator:
 
         # Validate the arguments
         validate_path(self.dataset)
+        if not isinstance(self.subjects, Sequence):
+            raise InvalidParameterError(
+                "subjects", actual=self.subjects, reason="must be a list"
+            )
+        if "i" in subjects:
+            raise InvalidParameterError(
+                "subjects",
+                actual=self.subjects,
+                reason="'i' is a reserved key for indexing",
+            )
         if self.fmt not in ["jsonl", "json", "csv"]:
-            raise ValueError(
-                f"Invalid fmt: '{self.fmt}'; must be one of 'jsonl', 'json', and "
-                "'csv'."
+            raise InvalidParameterError(
+                "fmt",
+                actual=self.fmt,
+                reason="must be one of 'jsonl', 'json', and 'csv'",
             )
         if self.logging_mode not in ["all", "failed", "none"]:
-            raise ValueError(
-                f"Invalid logging_mode: '{self.logging_mode}'; must be one of 'all', "
-                "'failed', and 'none'."
+            raise InvalidParameterError(
+                "logging_mode",
+                actual=self.logging_mode,
+                reason="must be one of 'all', 'failed', and 'none'",
             )
         if self.n_iter < 1:
-            raise ValueError(
-                f"Invalid n_iter: '{self.n_iter}'; must be an integer >= 1."
+            raise InvalidParameterError(
+                "n_iter", actual=self.n_iter, reason="must be an integer >= 1"
             )
-        if n_iter >= 1 and self.agg_method not in ["mean", "sum", "min", "max", "mode"]:
-            raise ValueError(
-                f"Invalid agg_method: '{self.agg_method}'; must be one of 'mean', "
-                "'sum', 'min', 'max', and 'mode'."
+        if n_iter > 1 and self.agg_method not in ["mean", "sum", "min", "max", "mode"]:
+            raise InvalidParameterError(
+                "agg_method",
+                actual=self.agg_method,
+                reason=(
+                    "when 'n_iter > 1', must be one of 'mean', 'sum', 'min', 'max', "
+                    "and 'mode'"
+                ),
             )
 
         # Load the keyword arguments for workers
         self._worker_kwargs: list[dict]
         if isinstance(self.workers, int):
             if self.workers < 1:
-                raise ValueError(
-                    f"Invalid workers: '{workers}'; if given as integer, must be >= 1."
+                raise InvalidParameterError(
+                    "workers",
+                    actual=self.workers,
+                    reason="if given as an integer, must be >= 1",
                 )
             self._worker_kwargs = [{} for _ in range(self.workers)]
         elif isinstance(self.workers, list):
             if any(not isinstance(worker, dict) for worker in self.workers):
-                raise ValueError(
-                    f"Invalid workers: '{workers}'; if given as list, each element "
-                    "must be a keyword dictionary."
+                raise InvalidParameterError(
+                    "workers",
+                    actual=self.workers,
+                    reason="if given as a list, each element must be a dict",
                 )
             self._worker_kwargs = self.workers
 
@@ -134,7 +163,7 @@ class BaseEvaluator:
 
         :meta public:
 
-        .. note ::
+        .. note::
             This method is not implemented and must be overridden in subclasses.
 
         Parameters
@@ -161,25 +190,6 @@ class BaseEvaluator:
         """
         raise NotImplementedError
 
-    def _sync_save_path(self, overwrite: bool = False) -> None:
-        """Sync up with the results in the save path.
-
-        This loads ``save_path`` and sets ``_result_df`` correspondingly.
-
-        Parameters
-        ----------
-        overwrite : bool, default=False
-            Whether to ignore existing results.
-        """
-        self._result_df: pd.DataFrame
-        if not os.path.exists(self.save_path):
-            ensure_path(self.save_path)
-            self._result_df = pd.DataFrame(columns=["i"], dtype=pd.Int64Dtype)
-        elif overwrite:
-            self._result_df = pd.DataFrame(columns=["i"], dtype=pd.Int64Dtype)
-        else:
-            self._result_df = pd.read_csv(self.save_path)
-
     def _yield_dataset(
         self, overwrite: bool = False
     ) -> Generator[tuple[int, int, DataItemType], Any, None]:
@@ -194,9 +204,22 @@ class BaseEvaluator:
         data_item : DataItemType
             The data item.
         """
+        df: pd.DataFrame
         existing_indices: list = []
-        if not overwrite:
-            existing_indices = list(self._result_df.loc[:, "i"])
+        if not os.path.exists(self.save_path):
+            ensure_path(self.save_path)
+            df = pd.DataFrame(columns=["i"], dtype=pd.Int64Dtype)
+        else:
+            df = pd.read_csv(self.save_path)
+            if all(subject in df.columns for subject in self.subjects):
+                existing_indices = list(
+                    df[
+                        df[list(self.subjects)]  # type: ignore[type-var]
+                        .isna()
+                        .any(axis=1)
+                    ].loc[:, "i"]
+                )
+        self._result_df = df
 
         # Yield the indices and corresponding data items
         if self.fmt == "jsonl":
@@ -245,10 +268,10 @@ class BaseEvaluator:
         if isinstance(scores, Real) and not pd.isna(
             scores
         ):  # type: ignore[call-overload]
-            return {"scores": scores}
+            if len(self.subjects) == 1:
+                return {self.subjects[0]: scores}
+            raise ScoringError("Got a single score but multiple subjects are assigned.")
         elif isinstance(scores, dict):
-            if "i" in scores:
-                raise ValueError("The 'i' key is reserved for indexing .")
             # mypy not working with numbers.Real
             bad_item = next(
                 (
@@ -262,15 +285,22 @@ class BaseEvaluator:
                 None,
             )
             if bad_item is not None:
-                raise TypeError(
+                raise ScoringError(
                     "The scores must be either a real number or a dictionary with "
                     f"real values; got a dictionary but there exists "
                     f"'{bad_item[0]}: {bad_item[1]}' of type '{type(bad_item[1])}'."
                 )
             else:
-                return scores
+                missing_keys = set(self.subjects).difference(set(scores))
+                if missing_keys:
+                    raise ScoringError(f"Missing keys: '{missing_keys}")
+                return {
+                    subject: score
+                    for subject, score in scores.items()
+                    if subject in self.subjects
+                }
         else:
-            raise TypeError(
+            raise ScoringError(
                 "The scores must be either a real number or a dictionary with real "
                 f"values; got '{scores}' of type '{type(scores)}' instead."
             )
@@ -290,7 +320,6 @@ class BaseEvaluator:
         completed : bool
             Whether the task has been completed.
         """
-        self._sync_save_path(overwrite=overwrite)
         mlog_path = manage_timed_logs(type(self).__name__)
 
         async def process_func(
@@ -369,18 +398,12 @@ class BaseEvaluator:
                 new_df = grp.apply(
                     lambda x: x.mode().iloc[0]  # type: ignore[attr-defined]
                 )
-        new_df = new_df.reset_index(names="i")
 
         # Update the file with the obtained results
-        self._result_df = pd.concat([self._result_df, new_df])
-        missing_data = self._result_df.isna().any()
-        if missing_data.any():
-            warnings.warn(
-                "Unexpected missing values detected in the columns "
-                f"{list(missing_data[missing_data].index)}",
-                UserWarning,
-                stacklevel=2,
-            )
+        cols = new_df.columns
+        for i, row in new_df.iterrows():
+            for col in cols:
+                self._result_df.at[i, col] = row[col]
         self._result_df.convert_dtypes().sort_values(by=["i"]).to_csv(
             self.save_path, index=False
         )
@@ -418,7 +441,7 @@ class BaseEvaluator:
         --------
         Suppose that the file at ``save_path`` looks like the following:
 
-        .. code-block ::
+        .. code-block::
 
             i,relevance,accuracy
             0,78,83
@@ -480,7 +503,7 @@ class BaseEvaluator:
         --------
         Suppose that the file at ``save_path`` looks like the following:
 
-        .. code-block ::
+        .. code-block::
 
             i,relevance,accuracy
             0,78,83
@@ -507,7 +530,7 @@ class BaseEvaluator:
 class BaseOpenAIEvaluator(BaseEvaluator):
     """Base evaluator class via OpenAI.
 
-    .. note ::
+    .. note::
         This class is meant to be subclassed. The methods that must be overriden
         include:
 
@@ -523,6 +546,14 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         it exists, its file contents will be treated as a (partially) written result.
         Whether to overwrite the existing results or to build on them depend on
         ``overwrite`` when using the :meth:`BaseOpenAIEvaluator.evaluate` method.
+    subjects : list
+        The subjects to evaluate. This should *strictly* correspond to how to scores
+        are obtained in :meth:`BaseOpenAIEvaluator._extract_scores`. If the score is
+        obtained as a single real value, ``subjects`` must be a list of one element and
+        that element will be used as the name of that score. If the score(s) are
+        obtained as a dictionary of subject-value pairs, all items in ``subjects`` must
+        appear as the keys of the obtained dictionary. Any additional key will be
+        discarded; any missing key will be treated as an error.
     openai_config : str or pathlib.Path
         The absolute path to the OpenAI configuration file.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
@@ -560,6 +591,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         self,
         dataset: str | Path,
         save_path: str | Path,
+        subjects: Sequence[Hashable],
         openai_config: str | Path,
         *,
         fmt: DatasetFormat = "jsonl",
@@ -592,6 +624,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         super().__init__(
             dataset=dataset,
             save_path=save_path,
+            subjects=subjects,
             fmt=fmt,
             workers=worker_kwargs,
             n_iter=n_iter,
@@ -605,7 +638,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
 
         :meta public:
 
-        .. note ::
+        .. note::
             This method is not implemented and must be overridden in subclasses.
 
         Parameters
@@ -631,7 +664,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
 
         :meta public:
 
-        .. note ::
+        .. note::
             This method is not implemented and must be overridden in subclasses.
 
         Parameters

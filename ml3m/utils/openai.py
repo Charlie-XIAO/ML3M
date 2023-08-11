@@ -55,7 +55,7 @@ def get_openai_config(config_path: str | Path) -> list[_OpenAIConfig]:
     Assume that the configuration file ``.config/openai.json`` looks like the
     following:
 
-    .. code-block ::
+    .. code-block::
 
         [
             {

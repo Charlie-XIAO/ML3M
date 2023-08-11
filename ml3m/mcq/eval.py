@@ -38,6 +38,10 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         and the expected answer of that question. See the notes for examples.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
+    score_name : str, default="score"
+        The key/column name to use for the obtained score. This should *not* be a key
+        or column name that already exists in the save location. Be extremely careful
+        since there will be *no* warning or exception raised on this.
     setting: str, optional
         The personality setting for the OpenAI model, passed as the system message. If
         ``None``, then no system message is used.
@@ -99,6 +103,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
+        score_name: str = "score",
         setting: str | None = None,
         n_iter: int = 1,
         timeout: float = 60,
@@ -107,6 +112,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         verbose: int = 1,
     ) -> None:
         self.info_func = info_func
+        self.score_name = score_name
         self.setting = setting
 
         # Validate the arguments
@@ -117,6 +123,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         super().__init__(
             dataset=dataset,
             save_path=save_path,
+            subjects=[self.score_name],
             openai_config=openai_config,
             fmt=fmt,
             n_iter=n_iter,

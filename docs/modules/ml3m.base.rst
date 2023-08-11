@@ -1,5 +1,5 @@
-ml3m.base package
-==================
+ml3m.base: Base Classes
+=======================
 
 .. automodule:: ml3m.base
    :members:
