@@ -79,6 +79,7 @@ exclude = [
 [[tool.mypy.overrides]]
 module = [
     "openai",
+    "pytest",
     "setuptools",
 ]
 ignore_missing_imports = true

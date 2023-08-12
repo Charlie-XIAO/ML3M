@@ -14,6 +14,7 @@ repos:
         name: mypy
         entry: mypy
         language: system
+        files: ^ml3m/
         types: [python]
       - id: future-annotations
         name: future-annotations
