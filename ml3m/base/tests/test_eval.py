@@ -10,10 +10,17 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal, assert_series_equal
 
-from ml3m.base import BaseEvaluator
+from ml3m.base import BaseEvaluator, BaseOpenAIEvaluator
 from ml3m.errors import InvalidParameterError, ScoringError
 
 random.seed(2023)
+
+
+#######################################################################################
+#                                                                                     #
+#                                        DATA                                         #
+#                                                                                     #
+#######################################################################################
 
 
 dataset_2 = [
@@ -21,13 +28,13 @@ dataset_2 = [
         "instruction": "What is the capital of China?",
         "input": "",
         "output": "The capital of China is Beijing.",
-        "response": "Beijing.",
+        "response": "Beijing.",  # This is clearly correct
     },
     {
         "instruction": "What is the capital of France?",
         "input": "",
         "output": "The capital of France is Paris.",
-        "response": "Paris.",
+        "response": "Marseille.",  # And this is clearly incorrect
     },
 ]
 
@@ -36,6 +43,8 @@ result_df_5_2 = pd.DataFrame(
     index=pd.Index([0, 1, 3, 4, 5], name="i"),
     columns=["score1", "score2"],
 )
+
+openai_configuration = [{"key": "sk-xxx", "base": None, "n_workers": 30}]
 
 
 @pytest.fixture(scope="module")
@@ -67,7 +76,22 @@ def prepare(request, storage):
     result_df_5_2.reset_index(names="i").to_csv(save_path, index=False)
     paths["result_df_5_2"] = save_path
 
+    # Make file for `openai_configuration`
+    save_path = os.path.join(
+        storage, f"openai_configuration__{request.keywords.node.name}.json"
+    )
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump(openai_configuration, f, indent=4, ensure_ascii=False)
+    paths["openai_configuration"] = save_path
+
     return paths
+
+
+#######################################################################################
+#                                                                                     #
+#                                  PREPARATION WORK                                   #
+#                                                                                     #
+#######################################################################################
 
 
 class NormalBaseEvaluator(BaseEvaluator):
@@ -169,7 +193,99 @@ class MultIterBaseEvaluator(BaseEvaluator):
         }
 
 
+class NormalBaseOpenAIEvaluator(BaseOpenAIEvaluator):
+    """Extends the base OpenAI evaluator.
+
+    This can judges the correctness of response based on whether the response is ``in``
+    the reference answer.
+    """
+
+    _pattern = re.compile(r"```\n(.+)\n```\n\n```\n(.+)\n```", re.DOTALL)
+
+    def __init__(
+        self,
+        dataset,
+        save_path,
+        subjects,
+        openai_config,
+        *,
+        fmt="jsonl",
+        n_iter=1,
+        agg_method=None,
+        timeout=60,
+        model="gpt-3.5-turbo",
+        logging_mode="all",
+        verbose=1,
+        **openai_kwargs,
+    ):
+        super().__init__(
+            dataset,
+            save_path,
+            subjects,
+            openai_config,
+            fmt=fmt,
+            n_iter=n_iter,
+            agg_method=agg_method,
+            timeout=timeout,
+            model=model,
+            logging_mode=logging_mode,
+            verbose=verbose,
+            **openai_kwargs,
+        )
+
+    def _prompt(self, data_item):
+        reference, actual = data_item["output"], data_item["response"]
+        return "", f"```\n{reference}\n```\n\n```\n{actual}\n```"
+
+    def _extract_scores(self, reply):
+        return int(reply)
+
+
+async def mock_openai_chatcompletion_acreate(*args, **kwargs):
+    """Mock function for openai.ChatCompletion.acreate."""
+    for item in kwargs["messages"]:
+        if item["role"] == "user":
+            target_msg = item["content"]
+            break
+
+    mat = re.match(r"```\n(.+)\n```\n\n```\n(.+)\n```", target_msg, re.DOTALL)
+    reference, actual = mat.group(1), mat.group(2)
+    score = (actual in reference) * 100
+
+    return {
+        "choices": [
+            {
+                "finish_reason": "stop",
+                "message": {"content": str(score), "role": "assistant"},
+            }
+        ],
+        "usage": {f"{term}_tokens": 1 for term in ["completion", "prompt", "total"]},
+    }
+
+
+async def mock_openai_chatcompletion_acreate_fail2stop(*args, **kwargs):
+    """Mock function for openai.ChatCompletion.acreate."""
+    return {
+        "choices": [
+            {
+                "finish_reason": "null",
+                "message": {"content": "Hello.", "role": "assistant"},
+            }
+        ],
+        "usage": {f"{term}_tokens": 1 for term in ["completion", "prompt", "total"]},
+    }
+
+
+#######################################################################################
+#                                                                                     #
+#                                  TESTS START HERE                                   #
+#                                                                                     #
+#######################################################################################
+
+
 class TestBaseEvaluator:
+    """Testing ml3m.base.BaseEvaluator."""
+
     @pytest.mark.parametrize("fmt", ["jsonl", "json", "csv"])
     @pytest.mark.parametrize("subjects", [["score1"], ["score2", "score3"]])
     @pytest.mark.parametrize("workers", [1, 3])
@@ -580,3 +696,67 @@ class TestBaseEvaluator:
 
         assert_frame_equal(result_df, expected_df, check_dtype=False)
         assert expected_scores == result_scores
+
+
+class TestBaseOpenAIEvaluator:
+    """Testing ml3m.base.BaseOpenAIEvaluator."""
+
+    def test_base_openai_evaluator_evaluate_basics(
+        self, storage, prepare, mocker, request
+    ):
+        """Test the basic evaluator functionalities."""
+        dataset = prepare["dataset_2__jsonl"]
+        openai_config = prepare["openai_configuration"]
+        save_path = os.path.join(
+            storage, f"save_path__{request.keywords.node.name}.csv"
+        )
+
+        patcher = mocker.patch("ml3m.base.eval.openai.ChatCompletion.acreate")
+        evaluator = NormalBaseOpenAIEvaluator(
+            dataset=dataset,
+            save_path=save_path,
+            openai_config=openai_config,
+            subjects=["score"],
+        )
+
+        # Patch to always fail with stop_reason != "stop"
+        patcher.side_effect = mock_openai_chatcompletion_acreate_fail2stop
+        completed = evaluator.evaluate()
+        assert not completed
+
+        df = evaluator._result_df
+        assert len(df) == 0
+        assert len(df.columns) == 0
+
+        # Patch to respond normally
+        patcher.side_effect = mock_openai_chatcompletion_acreate
+        completed = evaluator.evaluate()
+        assert completed
+
+        df = evaluator._result_df
+        expected = pd.DataFrame(
+            [[100], [0]], index=pd.Index([0, 1], name="i"), columns=["score"]
+        )
+        assert_frame_equal(df, expected, check_dtype=False)
+
+    def test_base_openai_evaluator_invalid_init(self, storage, prepare, request):
+        """Test invalid initialization."""
+        dataset = prepare["dataset_2__jsonl"]
+        openai_config = prepare["openai_configuration"]
+        save_path = os.path.join(
+            storage, f"save_path__{request.keywords.node.name}.csv"
+        )
+
+        for openai_kwargs in [
+            {"api_key": "xxx"},
+            {"api_base": "xxx"},
+            {"api_key": "xxx", "api_base": "xxx"},
+        ]:
+            with pytest.raises(InvalidParameterError):
+                NormalBaseOpenAIEvaluator(
+                    dataset=dataset,
+                    save_path=save_path,
+                    openai_config=openai_config,
+                    subjects=["score"],
+                    **openai_kwargs,
+                )

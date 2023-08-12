@@ -645,10 +645,15 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             for config in get_openai_config(self.openai_config)
             for _ in range(config.n_workers)
         ]
-        if "api_key" in self.openai_kwargs:
-            self.openai_kwargs.pop("api_key")
-        if "api_base" in self.openai_kwargs:
-            self.openai_kwargs.pop("api_base")
+        if "api_key" in self.openai_kwargs or "api_base" in self.openai_kwargs:
+            raise InvalidParameterError(
+                "**openai_kwargs",
+                actual=self.openai_kwargs,
+                reason=(
+                    "'api_key' and 'api_base' should be specified with a "
+                    "configuration file"
+                ),
+            )
 
         # Inherit from parent
         super().__init__(
