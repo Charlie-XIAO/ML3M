@@ -66,6 +66,9 @@ exclude = [
     "logs",
 ]
 
+[tool.black]
+line-length = 88
+
 [tool.mypy]
 exclude = [
     ".git",

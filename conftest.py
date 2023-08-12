@@ -15,6 +15,8 @@ def storage(request):
             dirname, str(random.randint(1000000, 9999999))
         )  # pragma: no cover
     os.mkdir(storage)
+    with open(os.path.join(storage, ".gitignore"), "w", encoding="utf-8") as f:
+        f.write("*")
 
     def cleanup():
         shutil.rmtree(storage)

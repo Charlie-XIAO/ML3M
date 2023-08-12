@@ -6,7 +6,7 @@ import os
 import traceback
 from datetime import datetime
 from numbers import Real
-from typing import TYPE_CHECKING, Any, Generator, Hashable, Sequence
+from typing import TYPE_CHECKING, Any, Generator, Hashable
 
 import openai
 import pandas as pd
@@ -80,7 +80,7 @@ class BaseEvaluator:
         self,
         dataset: str | Path,
         save_path: str | Path,
-        subjects: Sequence[Hashable],
+        subjects: list[Hashable],
         *,
         fmt: DatasetFormat = "jsonl",
         workers: int | list[dict] = 1,
@@ -101,7 +101,7 @@ class BaseEvaluator:
 
         # Validate the arguments
         validate_path(self.dataset)
-        if not isinstance(self.subjects, Sequence) or isinstance(self.subjects, str):
+        if not isinstance(self.subjects, list):
             raise InvalidParameterError(
                 "subjects", actual=self.subjects, reason="must be a list"
             )
@@ -303,7 +303,8 @@ class BaseEvaluator:
             else:
                 missing_keys = set(self.subjects).difference(set(scores))
                 if missing_keys:
-                    raise ScoringError(f"Missing keys: '{missing_keys}")
+                    missing_keys_repr = ", ".join(map(repr, missing_keys))
+                    raise ScoringError(f"Missing keys: {missing_keys_repr}.")
                 return {
                     subject: score
                     for subject, score in scores.items()
@@ -433,8 +434,8 @@ class BaseEvaluator:
 
     def load_scores(
         self,
-        subject_subset: Sequence | None = None,
-        item_subset: Sequence | None = None,
+        subject_subset: list | None = None,
+        items: list | None = None,
     ) -> pd.DataFrame:
         """Load the scores from the save location.
 
@@ -442,10 +443,15 @@ class BaseEvaluator:
         ----------
         subject_subset : list or None
             The subjects of the scores to select, i.e., the columns. If ``None``,
-            select all subjects.
-        item_subset : list or None
+            select all subjects. In the returned :class:`pd.DataFrame`, the columns
+            will be in the same order as ``subject_subset``.
+        items : list or None
             The indices of the items to select. If ``None``, select all items. This
-            will be applied after ``subject_subset``.
+            will be applied after ``subject_subset``. This does not necessarily need
+            to be a subset of the index of the loaded :class:`pd.DataFrame`. The
+            indices that do not exist in the index of the loaded :class:`pd.DataFrame`
+            will be assigned ``NaN``. In the returned :class:`pd.DataFrame`, the rows
+            will be in the same order as ``items``.
 
         Returns
         -------
@@ -458,45 +464,53 @@ class BaseEvaluator:
 
         .. code-block::
 
-            i,relevance,accuracy
+            i,score1,score2
             0,78,83
             1,64,76
-            2,100,92
-            3,28,38
-            4,30,45
+            3,100,92
+            4,28,38
+            5,30,45
 
         >>> evaluator.load_scores()  # doctest: +SKIP
-           i  relevance  accuracy
-        0  0         78        83
-        1  1         64        76
-        2  2        100        92
-        3  3         28        38
-        4  4         30        45
+           score1  score2
+        i
+        0      78      83
+        1      64      76
+        3     100      92
+        4      28      38
+        5      30      45
 
-        >>> evaluator.load_scores(subject_subset=["relevance"])  # doctest: +SKIP
-           i  relevance
-        0  0         78
-        1  1         64
-        2  2        100
-        3  3         28
-        4  4         30
+        >>> evaluator.load_scores(subject_subset=["score2"])  # doctest: +SKIP
+           score2
+        i
+        0      83
+        1      76
+        3      92
+        4      38
+        5      45
 
-        >>> evaluator.load_scores(item_subset=[1, 3])  # doctest: +SKIP
-           i  relevance  accuracy
-        1  1         64        76
-        3  3         28        38
+        >>> evaluator.load_scores(items=list(range(7)))  # doctest: +SKIP
+           score1  score2
+        i
+        0    78.0    83.0
+        1    64.0    76.0
+        2     NaN     NaN
+        3   100.0    92.0
+        4    28.0    38.0
+        5    30.0    45.0
+        6     NaN     NaN
         """
-        result_df = pd.read_csv(self.save_path)
+        result_df = pd.read_csv(self.save_path).set_index("i")
         if subject_subset is not None:
-            result_df = result_df[["i", *subject_subset]]
-        if item_subset is not None:
-            result_df = result_df.loc[result_df["i"].isin(item_subset)]
+            result_df = result_df[subject_subset]
+        if items is not None:
+            result_df = result_df.reindex(items)
         return result_df
 
     def load_avg_score(
         self,
-        subject_subset: Sequence | None = None,
-        item_subset: Sequence | None = None,
+        subject_subset: list | None = None,
+        items: list | None = None,
     ) -> dict[str, Real]:
         """Load the average score of each subject from the save location.
 
@@ -505,9 +519,12 @@ class BaseEvaluator:
         subject_subset : list or None
             The subjects of the scores to select, i.e., the columns. If ``None``,
             select all subjects.
-        item_subset : list or None
+        items : list or None
             The indices of the items to select. If ``None``, select all items. This
-            will be applied after ``subject_subset``.
+            will be applied after ``subject_subset``. This does not necessarily need
+            to be a subset of the index of the loaded :class:`pd.DataFrame`. However,
+            any item out of range would not be taken into account when computing the
+            average score.
 
         Returns
         -------
@@ -520,7 +537,7 @@ class BaseEvaluator:
 
         .. code-block::
 
-            i,relevance,accuracy
+            i,score1,score2
             0,78,83
             1,64,76
             2,100,92
@@ -528,18 +545,16 @@ class BaseEvaluator:
             4,30,45
 
         >>> evaluator.load_avg_score()  # doctest: +SKIP
-        {'relevance': 60.0, 'accuracy': 66.8}
+        {'score1': 60.0, 'score2': 66.8}
 
-        >>> evaluator.load_avg_score(subject_subset=["relevance"])  # doctest: +SKIP
-        {'relevance': 60.0}
+        >>> evaluator.load_avg_score(subject_subset=["score2"])  # doctest: +SKIP
+        {'score2': 66.8}
 
-        >>> evaluator.load_avg_score(item_subset=[1, 3])  # doctest: +SKIP
-        {'relevance': 46.0, 'accuracy': 57.0}
+        >>> evaluator.load_avg_score(items=list(range(7)))  # doctest: +SKIP
+        {'score1': 60.0, 'score2': 66.8}
         """
-        result_df = self.load_scores(
-            subject_subset=subject_subset, item_subset=item_subset
-        )
-        return result_df.drop("i", axis=1).mean().to_dict()
+        result_df = self.load_scores(subject_subset=subject_subset, items=items)
+        return result_df.mean().to_dict()
 
 
 class BaseOpenAIEvaluator(BaseEvaluator):
@@ -606,7 +621,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         self,
         dataset: str | Path,
         save_path: str | Path,
-        subjects: Sequence[Hashable],
+        subjects: list[Hashable],
         openai_config: str | Path,
         *,
         fmt: DatasetFormat = "jsonl",

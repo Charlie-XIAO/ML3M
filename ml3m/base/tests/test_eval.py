@@ -2,51 +2,72 @@ import asyncio
 import json
 import os
 import random
+import re
+from itertools import product
 
+import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal, assert_series_equal
 
 from ml3m.base import BaseEvaluator
-from ml3m.errors import InvalidParameterError
+from ml3m.errors import InvalidParameterError, ScoringError
 
 random.seed(2023)
 
 
-@pytest.fixture
-def load_dataset():
-    """Load a dataset."""
-    return [
-        {
-            "instruction": "What is the capital of China?",
-            "input": "",
-            "output": "The capital of China is Beijing.",
-            "response": "Beijing.",
-        },
-        {
-            "instruction": "What is the capital of France?",
-            "input": "",
-            "output": "The capital of France is Paris.",
-            "response": "Paris.",
-        },
-    ]
+dataset_2 = [
+    {
+        "instruction": "What is the capital of China?",
+        "input": "",
+        "output": "The capital of China is Beijing.",
+        "response": "Beijing.",
+    },
+    {
+        "instruction": "What is the capital of France?",
+        "input": "",
+        "output": "The capital of France is Paris.",
+        "response": "Paris.",
+    },
+]
+
+result_df_5_2 = pd.DataFrame(
+    data=np.array([[78, 83], [64, 76], [100, 92], [28, 38], [30, 45]]),
+    index=pd.Index([0, 1, 3, 4, 5], name="i"),
+    columns=["score1", "score2"],
+)
 
 
-def make_dataset(fmt, storage, load_dataset):
-    """Make a dataset and return its path."""
-    data = load_dataset
-    orig_dataset = os.path.join(storage, f"make_dataset__dataset.{fmt}")
-    if fmt == "jsonl":
-        with open(orig_dataset, "w", encoding="utf-8") as f:
-            for item in data:
-                f.write(json.dumps(item, ensure_ascii=False) + "\n")
-    elif fmt == "json":
-        with open(orig_dataset, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-    else:  # fmt == "csv"
-        df = pd.DataFrame(data)
-        df.to_csv(orig_dataset, index=False)
-    return orig_dataset
+@pytest.fixture(scope="module")
+def prepare(request, storage):
+    """Make a temporary storage and clear it towards the end."""
+    paths = {}
+
+    # Make files for `dataset_2`
+    for fmt in ["jsonl", "json", "csv"]:
+        dataset = os.path.join(
+            storage, f"dataset_2__{request.keywords.node.name}.{fmt}"
+        )
+        if fmt == "jsonl":
+            with open(dataset, "w", encoding="utf-8") as f:
+                for item in dataset_2:
+                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
+        elif fmt == "json":
+            with open(dataset, "w", encoding="utf-8") as f:
+                json.dump(dataset_2, f, ensure_ascii=False, indent=4)
+        else:  # fmt == "csv"
+            df = pd.DataFrame(dataset_2)
+            df.to_csv(dataset, index=False)
+        paths[f"dataset_2__{fmt}"] = dataset
+
+    # Make file for `result_df_5_2`
+    save_path = os.path.join(
+        storage, f"result_df_5_2__{request.keywords.node.name}.csv"
+    )
+    result_df_5_2.reset_index(names="i").to_csv(save_path, index=False)
+    paths["result_df_5_2"] = save_path
+
+    return paths
 
 
 class NormalBaseEvaluator(BaseEvaluator):
@@ -154,10 +175,10 @@ class TestBaseEvaluator:
     @pytest.mark.parametrize("workers", [1, 3])
     @pytest.mark.parametrize("n_iter,agg_method", [(1, None), (3, "sum"), (3, "mode")])
     def test_base_evaluator_result_versus_written(
-        self, fmt, subjects, workers, n_iter, agg_method, storage, load_dataset, request
+        self, fmt, subjects, workers, n_iter, agg_method, storage, prepare, request
     ):
         """Test that evaluator._result_df and the written csv are the same."""
-        dataset = make_dataset(fmt, storage, load_dataset)
+        dataset = prepare[f"dataset_2__{fmt}"]
         save_path = os.path.join(
             storage, f"save_path__{request.keywords.node.name}.csv"
         )
@@ -183,7 +204,7 @@ class TestBaseEvaluator:
     @pytest.mark.parametrize("new_subjects", [["score4"], ["score5", "score6"]])
     @pytest.mark.parametrize("workers", [1, 3])
     def test_base_evaluator_evaluate_basics(
-        self, fmt, subjects, new_subjects, workers, storage, load_dataset, request
+        self, fmt, subjects, new_subjects, workers, storage, prepare, request
     ):
         """Test the basic evaluator functionalities.
 
@@ -197,8 +218,7 @@ class TestBaseEvaluator:
         -> Pass all data items on the new subjects
         -> Evaluate again (should make no change)
         """
-        data = load_dataset
-        dataset = make_dataset(fmt, storage, load_dataset)
+        dataset = prepare[f"dataset_2__{fmt}"]
         save_path = os.path.join(
             storage, f"save_path__{request.keywords.node.name}.csv"
         )
@@ -220,7 +240,7 @@ class TestBaseEvaluator:
         assert len(df.columns) == 0
 
         # This should pass the second data item but fail the first
-        item_0_instruction = data[0]["instruction"]
+        item_0_instruction = dataset_2[0]["instruction"]
         evaluator.mode = f"err_on_instruction_{item_0_instruction}"
         completed = evaluator.evaluate()
         assert not completed
@@ -309,11 +329,11 @@ class TestBaseEvaluator:
     @pytest.mark.parametrize("workers", [1, 3])
     @pytest.mark.parametrize("agg_method", ["mean", "sum", "min", "max", "mode"])
     def test_base_evaluator_aggregate(
-        self, fmt, workers, agg_method, storage, load_dataset, request
+        self, fmt, workers, agg_method, storage, prepare, request
     ):
         """Test the aggregation methods."""
         subjects = ["score1", "score2"]
-        dataset = make_dataset(fmt, storage, load_dataset)
+        dataset = prepare[f"dataset_2__{fmt}"]
         save_path = os.path.join(
             storage, f"save_path__{request.keywords.node.name}.csv"
         )
@@ -361,14 +381,12 @@ class TestBaseEvaluator:
         )
 
     @pytest.mark.parametrize("fmt", ["jsonl", "json", "csv"])
-    def test_base_evalutor_overlapping_subjects(
-        self, fmt, storage, load_dataset, request
-    ):
+    def test_base_evalutor_overlapping_subjects(self, fmt, storage, prepare, request):
         """Test the behavior when two evaluations have overlapping subject.
 
         The overlapped subject will be overwritten without any warning or error.
         """
-        dataset = make_dataset(fmt, storage, load_dataset)
+        dataset = prepare[f"dataset_2__{fmt}"]
         save_path = os.path.join(
             storage, f"save_path__{request.keywords.node.name}.csv"
         )
@@ -403,9 +421,9 @@ class TestBaseEvaluator:
         with pytest.raises(AssertionError):
             assert_series_equal(df.loc[:, "score"], df2.loc[:, "score"])
 
-    def test_base_evalutor_invalid_init(self, storage, load_dataset, request):
+    def test_base_evalutor_invalid_init(self, storage, prepare, request):
         """Test invalid initialization."""
-        dataset = make_dataset("jsonl", storage, load_dataset)
+        dataset = prepare["dataset_2__jsonl"]
         save_path = os.path.join(
             storage, f"save_path__{request.keywords.node.name}.csv"
         )
@@ -462,3 +480,103 @@ class TestBaseEvaluator:
                     subjects=["score"],
                     workers=workers,
                 )
+
+    def test_base_evalutor_check_score(self, storage, prepare, request):
+        """Test the `_check_score` method."""
+        dataset = prepare["dataset_2__jsonl"]
+        save_path = os.path.join(
+            storage, f"save_path__{request.keywords.node.name}.csv"
+        )
+
+        evaluator_1 = BaseEvaluator(
+            dataset=dataset,
+            save_path=save_path,
+            subjects=["score"],
+        )
+        evaluator_3 = BaseEvaluator(
+            dataset=dataset,
+            save_path=save_path,
+            subjects=["score1", "score2", "score3"],
+        )
+
+        # Test score not real or dict
+        for evaluator, scores in product(
+            [evaluator_1, evaluator_3], [None, complex(1, 2), pd.NA]
+        ):
+            msg = re.escape(
+                "The scores must be either a real number or a dictionary with real "
+                f"values; got '{scores}' of type '{type(scores)}' instead."
+            )
+            with pytest.raises(ScoringError, match=msg):
+                evaluator._check_scores(scores)
+
+        # Test score dict with not all values being real
+        for invalid_val in [None, complex(1, 2), pd.NA]:
+            msg = re.escape(
+                "The scores must be either a real number or a dictionary with real "
+                f"values; got a dictionary but there exists 'score: {invalid_val}' of "
+                f"type '{type(invalid_val)}'."
+            )
+            with pytest.raises(ScoringError, match=msg):
+                evaluator_1._check_scores({"score": invalid_val})
+            msg = re.escape(
+                "The scores must be either a real number or a dictionary with real "
+                f"values; got a dictionary but there exists 'score2: {invalid_val}' of "
+                f"type '{type(invalid_val)}'."
+            )
+            with pytest.raises(ScoringError, match=msg):
+                evaluator_3._check_scores(
+                    {"score1": 1, "score2": invalid_val, "score3": invalid_val}
+                )
+
+        # Test exception when single score but multiple subjects
+        msg = re.escape("Got a single score but multiple subjects are assigned.")
+        with pytest.raises(ScoringError, match=msg):
+            evaluator_3._check_scores(10)
+
+        # Test exception when missing required subjects
+        msg = re.compile(r"Missing keys: '.+', '.+'\.")
+        with pytest.raises(ScoringError, match=msg):
+            evaluator_3._check_scores({"score2": 10, "score4": 10})
+
+        # Test normal functionalities
+        for scores in [10, {"score": 10}, {"score": 10, "extra_score": 10}]:
+            assert evaluator_1._check_scores(scores) == {"score": 10}
+        expected = {"score1": 10, "score2": 10, "score3": 10}
+        scores = expected.copy()
+        assert evaluator_3._check_scores(scores) == expected
+        scores["score4"] = 10
+        assert evaluator_3._check_scores(scores) == expected
+
+    @pytest.mark.parametrize("subject_subset", [None, ["score2"], ["score2", "score1"]])
+    @pytest.mark.parametrize("items", [None, [3, 5, 0], list(range(7))])
+    def test_base_evalutor_scoring_methods(self, subject_subset, items, prepare):
+        """Test the `load_scores` and `load_avg_score` methods."""
+        dataset = prepare["dataset_2__jsonl"]
+        save_path = prepare["result_df_5_2"]
+
+        evaluator = BaseEvaluator(
+            dataset=dataset,
+            save_path=save_path,
+            subjects=["score1", "score2"],
+        )
+
+        expected_df = result_df_5_2
+        if subject_subset is not None:
+            expected_df = expected_df[subject_subset]
+        if items is not None:
+            expected_df = expected_df.reindex(items)
+
+        subjects = ["score1", "score2"] if subject_subset is None else subject_subset
+        expected_scores = {
+            subject: np.mean(expected_df.loc[:, subject].dropna())
+            for subject in subjects
+        }
+
+        result_df = evaluator.load_scores(subject_subset=subject_subset, items=items)
+        result_scores = evaluator.load_avg_score(
+            subject_subset=subject_subset, items=items
+        )
+
+        assert_frame_equal(result_df, expected_df, check_dtype=False)
+        assert expected_scores == result_scores
