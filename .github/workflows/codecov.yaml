@@ -26,7 +26,7 @@ jobs:
 
       - name: Generate coverage report
         run: |
-          coverage run -m pytest ml3m
+          coverage run --source ml3m -m pytest
           coverage xml -i
         env:
           COVERAGE_RUN: true
