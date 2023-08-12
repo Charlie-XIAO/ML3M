@@ -8,3 +8,4 @@ build/
 dist/
 ml3m.egg-info/
 .coverage
+tokens.txt

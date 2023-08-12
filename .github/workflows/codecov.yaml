@@ -1,14 +1,11 @@
-name: unittest
+name: Coverage report
 
 on:
   push:
     branches: [master]
 
 jobs:
-  unittest:
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.11']
+  codecov:
     runs-on: ubuntu-latest
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -17,19 +14,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-mock coverage
-
-      - name: Run unit tests
-        run: |
-          pytest ml3m
+          python -m pip install -r requirements.txt
+          python -m pip install pytest pytest-mock coverage
 
       - name: Generate coverage report
         run: |
