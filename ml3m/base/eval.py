@@ -214,12 +214,12 @@ class BaseEvaluator:
             if all(subject in df.columns for subject in self.subjects):
                 existing_indices = list(
                     df[
-                        df[list(self.subjects)]  # type: ignore[type-var]
+                        ~df[list(self.subjects)]  # type: ignore[type-var]
                         .isna()
                         .any(axis=1)
                     ].loc[:, "i"]
                 )
-        self._result_df = df
+        self._result_df = df.set_index("i")
 
         # Yield the indices and corresponding data items
         if self.fmt == "jsonl":
@@ -361,8 +361,12 @@ class BaseEvaluator:
                     "norm_msg": norm_msg,
                     "err_msg": err_trace,
                 }
-                assert isinstance(addtlks, list)
-                async with addtlks[0]:
+                if len(self._worker_kwargs) > 1:
+                    assert isinstance(addtlks, list)
+                    async with addtlks[0]:
+                        with open(mlog_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
+                else:
                     with open(mlog_path, "a", encoding="utf-8") as f:
                         f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
 
@@ -402,11 +406,12 @@ class BaseEvaluator:
         # Update the file with the obtained results
         cols = new_df.columns
         for i, row in new_df.iterrows():
-            for col in cols:
-                self._result_df.at[i, col] = row[col]
-        self._result_df.convert_dtypes().sort_values(by=["i"]).to_csv(
-            self.save_path, index=False
-        )
+            # TODO: maybe resolve: error: Invalid index type "tuple[Hashable | None,
+            # Index]" for "_LocIndexerFrame"; expected type ...
+            # not sure whether the current operation is perfectly valid in all cases
+            self._result_df.loc[i, cols] = row  # type: ignore[index]
+        self._result_df = self._result_df.convert_dtypes().sort_index()
+        self._result_df.reset_index(names="i").to_csv(self.save_path, index=False)
 
         # Summarize the save location (and possibly log location)
         print(colored("Results can be found at:", COLOR.GREEN))

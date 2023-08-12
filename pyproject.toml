@@ -82,3 +82,9 @@ module = [
     "setuptools",
 ]
 ignore_missing_imports = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
