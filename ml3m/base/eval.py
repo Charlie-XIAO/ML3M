@@ -101,9 +101,13 @@ class BaseEvaluator:
 
         # Validate the arguments
         validate_path(self.dataset)
-        if not isinstance(self.subjects, Sequence):
+        if not isinstance(self.subjects, Sequence) or isinstance(self.subjects, str):
             raise InvalidParameterError(
                 "subjects", actual=self.subjects, reason="must be a list"
+            )
+        if len(self.subjects) == 0:
+            raise InvalidParameterError(
+                "subjects", actual=self.subjects, reason="must not be empty"
             )
         if "i" in subjects:
             raise InvalidParameterError(
@@ -123,7 +127,7 @@ class BaseEvaluator:
                 actual=self.logging_mode,
                 reason="must be one of 'all', 'failed', and 'none'",
             )
-        if self.n_iter < 1:
+        if not isinstance(self.n_iter, int) or self.n_iter < 1:
             raise InvalidParameterError(
                 "n_iter", actual=self.n_iter, reason="must be an integer >= 1"
             )
@@ -155,6 +159,12 @@ class BaseEvaluator:
                     reason="if given as a list, each element must be a dict",
                 )
             self._worker_kwargs = self.workers
+        else:
+            raise InvalidParameterError(
+                "workers",
+                actual=self.workers,
+                reason="must be an integer >= 1 or a list of dict",
+            )
 
     async def _aget_score(
         self, data_item: DataItemType, **kwargs
