@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING, Any, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Callable
 
 from .._metrics import bleu
 from ..base.eval import BaseEvaluator, BaseOpenAIEvaluator
@@ -107,7 +107,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
-        aspects: Sequence[QaSubject] | None = None,
+        aspects: list[QaSubject] | None = None,
         setting: str | None = None,
         n_iter: int = 3,
         timeout: float = 60,
@@ -134,8 +134,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
                 "aspects",
                 actual=self.aspects,
                 reason=(
-                    "must be a sequence of non-duplicated aspects among "
-                    f"{avail_aspects}"
+                    f"must be a list of non-duplicated aspects among {avail_aspects}"
                 ),
             )
 

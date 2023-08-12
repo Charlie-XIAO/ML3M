@@ -6,13 +6,12 @@ from __future__ import annotations
 import re
 from collections import Counter
 from itertools import tee
-from typing import Sequence
 
 import numpy as np
 from numpy import ma
 
 
-def bleu(actual: str, reference: str, ks: Sequence[int]) -> list[float]:
+def bleu(actual: str, reference: str, ks: list[int]) -> list[float]:
     """Compute the BLEU-k score(s).
 
     BLEU, a.k.a. Bilingual Evaluation Understudy, computes the k-gram overlap between

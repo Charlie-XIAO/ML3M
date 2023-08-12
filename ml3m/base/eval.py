@@ -6,7 +6,7 @@ import os
 import traceback
 from datetime import datetime
 from numbers import Real
-from typing import TYPE_CHECKING, Any, Generator, Hashable
+from typing import TYPE_CHECKING, Any, Generator
 
 import openai
 import pandas as pd
@@ -80,7 +80,7 @@ class BaseEvaluator:
         self,
         dataset: str | Path,
         save_path: str | Path,
-        subjects: list[Hashable],
+        subjects: list,
         *,
         fmt: DatasetFormat = "jsonl",
         workers: int | list[dict] = 1,
@@ -621,7 +621,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         self,
         dataset: str | Path,
         save_path: str | Path,
-        subjects: list[Hashable],
+        subjects: list,
         openai_config: str | Path,
         *,
         fmt: DatasetFormat = "jsonl",
