@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest pytest-mock pycoverage
+          pip install pytest pytest-mock coverage
 
       - name: Run unit tests
         run: |
