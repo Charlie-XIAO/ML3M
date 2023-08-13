@@ -26,15 +26,12 @@ class _OpenAIConfig:
         self.n_workers = n_workers
         self.base = base or "https://api.openai.com/v1"
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return (
             f"{type(self).__name__} <\n    \033[92mkey\033[0m {self.key},\n"
             f"    \033[92mbase\033[0m {self.base},\n    \033[92mn_workers\033[0m "
             f"{self.n_workers},\n>"
         )
-
-    def __repr__(self) -> str:
-        return str(self)
 
 
 def get_openai_config(config_path: str | Path) -> list[_OpenAIConfig]:

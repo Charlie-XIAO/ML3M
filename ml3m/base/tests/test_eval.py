@@ -1,8 +1,8 @@
-import asyncio
 import json
 import os
 import random
 import re
+import threading
 from itertools import product
 
 import numpy as np
@@ -176,12 +176,12 @@ class MultIterBaseEvaluator(BaseEvaluator):
             verbose=verbose,
         )
         self.sc_mapping = sc_mapping
-        self.lock = asyncio.Lock()
+        self.lock = threading.Lock()
         self.tracker = {}
 
     async def _aget_score(self, data_item, **kwargs):
         instruction = data_item["instruction"]
-        async with self.lock:
+        with self.lock:
             if instruction in self.tracker:
                 ind = self.tracker[instruction]
                 self.tracker[instruction] += 1

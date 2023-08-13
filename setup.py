@@ -21,6 +21,7 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     packages=find_packages(),
+    python_requires=">=3.8",
     install_requires=["pandas", "numpy", "openai"],
     keywords=["python", "LLM", "evaluation"],
     classifiers=[

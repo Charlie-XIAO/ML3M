@@ -1,7 +1,7 @@
 Installation
 ============
 
-ml3m requires Python 3.10+ and can work on Linux/MacOS/Windows. Its dependencies include
+ml3m requires Python 3.8+ and can work on Linux/MacOS/Windows. Its dependencies include
 the following:
 
 - `numpy <https://numpy.org/>`_
@@ -21,8 +21,3 @@ versions and dependencies:
 .. code-block::
 
     python -c "import ml3m; ml3m.show_versions()"
-
-.. note::
-    Older versions of Python (Python 3.9-) are not supported due to a known ``asyncio``
-    bug which ml3m currently may invoke. We may try to support older versions in the
-    future by using a different approach.
