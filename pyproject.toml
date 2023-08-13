@@ -93,3 +93,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
+
+omit = [
+    "ml3m/_typing.py",
+]

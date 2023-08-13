@@ -51,22 +51,18 @@ def process_func_novarkey(item):
 
 async def process_afunc_novarkey(item, addtlks=None):
     """Accepts no variable-length keyword arguments."""
-    await asyncio.sleep(0.01)
 
 
 async def process_afunc_noaddtlks(item, **kwargs):
     """Does not accept addtlks."""
-    await asyncio.sleep(0.01)
 
 
 async def process_afunc_addtlks_positional(item, addtlks, **kwargs):
     """Positional addtlks thus no default value."""
-    await asyncio.sleep(0.01)
 
 
 async def process_afunc_addtlks_default_not_none(item, addtlks=1, **kwargs):
     """Default value of addtlks not None."""
-    await asyncio.sleep(0.01)
 
 
 #######################################################################################
