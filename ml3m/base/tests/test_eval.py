@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import random
@@ -128,7 +129,7 @@ class NormalBaseEvaluator(BaseEvaluator):
         )
         self.mode = mode
 
-    async def _aget_score(self, data_item, **kwargs):
+    def _get_score(self, data_item, **kwargs):
         if self.mode == "random" or self.mode.startswith("err_on_"):
             if (
                 self.mode.startswith("err_on_instruction_")
@@ -141,6 +142,10 @@ class NormalBaseEvaluator(BaseEvaluator):
             return {subject: random.randint(0, 100) for subject in self.subjects}
         elif self.mode == "all_err":
             raise ValueError
+
+    async def _aget_score(self, data_item, **kwargs):
+        await asyncio.sleep(0.01)
+        return self._get_score(data_item, **kwargs)
 
 
 class MultIterBaseEvaluator(BaseEvaluator):
@@ -179,7 +184,7 @@ class MultIterBaseEvaluator(BaseEvaluator):
         self.lock = threading.Lock()
         self.tracker = {}
 
-    async def _aget_score(self, data_item, **kwargs):
+    def _get_score(self, data_item, **kwargs):
         instruction = data_item["instruction"]
         with self.lock:
             if instruction in self.tracker:
@@ -191,6 +196,10 @@ class MultIterBaseEvaluator(BaseEvaluator):
         return {
             subject: self.sc_mapping(ind, i) for i, subject in enumerate(self.subjects)
         }
+
+    async def _aget_score(self, data_item, **kwargs):
+        await asyncio.sleep(0.01)
+        return self._get_score(data_item, **kwargs)
 
 
 class NormalBaseOpenAIEvaluator(BaseOpenAIEvaluator):
@@ -252,6 +261,7 @@ async def mock_openai_chatcompletion_acreate(*args, **kwargs):
     reference, actual = mat.group(1), mat.group(2)
     score = (actual in reference) * 100
 
+    await asyncio.sleep(0.01)
     return {
         "choices": [
             {
@@ -290,8 +300,20 @@ class TestBaseEvaluator:
     @pytest.mark.parametrize("subjects", [["score1"], ["score2", "score3"]])
     @pytest.mark.parametrize("workers", [1, 3])
     @pytest.mark.parametrize("n_iter,agg_method", [(1, None), (3, "sum"), (3, "mode")])
+    @pytest.mark.parametrize("logging_mode", ["none", "all", "failed"])
+    @pytest.mark.parametrize("verbose", [0, 1, 2])
     def test_base_evaluator_result_versus_written(
-        self, fmt, subjects, workers, n_iter, agg_method, storage, prepare, request
+        self,
+        fmt,
+        subjects,
+        workers,
+        n_iter,
+        agg_method,
+        logging_mode,
+        verbose,
+        storage,
+        prepare,
+        request,
     ):
         """Test that evaluator._result_df and the written csv are the same."""
         dataset = prepare[f"dataset_2__{fmt}"]
@@ -307,6 +329,8 @@ class TestBaseEvaluator:
             workers=workers,
             n_iter=n_iter,
             agg_method=agg_method,
+            logging_mode=logging_mode,
+            verbose=verbose,
         )
         completed = evaluator.evaluate()
         assert completed

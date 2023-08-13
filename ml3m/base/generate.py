@@ -4,6 +4,7 @@ import json
 import os
 import traceback
 from datetime import datetime
+from inspect import iscoroutinefunction
 from typing import TYPE_CHECKING, Any, Callable, Generator
 
 import pandas as pd
@@ -12,6 +13,7 @@ from .._async import AsyncRunner
 from .._color import COLOR, colored
 from .._logging import manage_timed_logs
 from .._paths import ensure_path, validate_path
+from ..errors import InvalidParameterError
 
 if TYPE_CHECKING:
     import asyncio
@@ -34,7 +36,8 @@ class ResponseGenerator:
         The function that queries a model given a data item and outputs the model
         response. The input parameter should be a :class:`pandas.Series`, a list, or a
         dictionary, depending on ``format``. The output should be a single string
-        representing the model response.
+        representing the model response. This function should be synchronous if
+        ``n_workers=1`` and asynchronous otherwise.
     response_name : str
         The key or column name to use for the response. This should *not* be a key or
         column name that already exists in the dataset. Be extremely careful since
@@ -77,12 +80,41 @@ class ResponseGenerator:
 
         # Validate the arguments
         validate_path(self.orig_dataset)
+        if not isinstance(self.n_workers, int) or self.n_workers < 1:
+            raise InvalidParameterError(
+                "n_workers",
+                actual=self.n_workers,
+                reason="must be an integer >= 1",
+            )
         if not callable(self.query_func):
-            raise ValueError("query_func must be a callable.")
+            raise InvalidParameterError(
+                "query_func",
+                actual=self.query_func,
+                reason="must be a callable",
+            )
+        if self.n_workers == 1 and iscoroutinefunction(self.query_func):
+            raise InvalidParameterError(
+                "query_func",
+                actual=self.query_func,
+                reason="must be synchronous when 'n_workers = 1'",
+            )
+        elif self.n_workers > 1 and not iscoroutinefunction(self.query_func):
+            raise InvalidParameterError(
+                "query_func",
+                actual=self.query_func,
+                reason="must be asynchronous when 'n_workers > 1'",
+            )
         if self.fmt not in ["jsonl", "json", "csv"]:
-            raise ValueError(
-                f"Invalid fmt: '{self.fmt}'; must be one of 'jsonl', 'json', and "
-                "'csv'."
+            raise InvalidParameterError(
+                "fmt",
+                actual=self.fmt,
+                reason="must be one of 'jsonl', 'json', and 'csv'",
+            )
+        if self.logging_mode not in ["all", "failed", "none"]:
+            raise InvalidParameterError(
+                "logging_mode",
+                actual=self.logging_mode,
+                reason="must be one of 'all', 'failed', and 'none'",
             )
 
     def _yield_dataset(
@@ -170,12 +202,8 @@ class ResponseGenerator:
         """
         mlog_path = manage_timed_logs(prefix=type(self).__name__)
 
-        async def process_func(
-            item: tuple[int, DataItemType],
-            addtlks: list[asyncio.Lock] | None = None,
-            **kwargs,
-        ) -> tuple[tuple[int, str], str, None] | tuple[None, None, str]:
-            """The process function required for the asynchronous runner."""
+        def process_func(item: tuple[int, DataItemType], **kwargs):
+            """The sequential processing function."""
             i, data_item = item
             response: str | None = None
             norm_msg: str | None = None
@@ -185,6 +213,47 @@ class ResponseGenerator:
             # Handle all exceptions
             try:
                 response = self.query_func(data_item)
+                norm_msg = f"Item.{i:<10} {response:.40s}"
+            except Exception as e:
+                err, err_trace = e, traceback.format_exc()
+
+            # Write the log on demand
+            if (
+                self.logging_mode == "failed"
+                and response is None
+                or self.logging_mode == "all"
+            ):
+                mlog_item = {
+                    "time": str(datetime.now()),
+                    "index": i,
+                    "response": response,
+                    "norm_msg": norm_msg,
+                    "err_msg": err_trace,
+                }
+                with open(mlog_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
+
+            # Return the information based on success or failure
+            if response is not None and norm_msg is not None:
+                return (i, response), norm_msg, None
+            return None, None, f"Item.{i:<10} {type(err).__name__}: {err!s:.30s}"
+
+        async def process_afunc(
+            item: tuple[int, DataItemType],
+            addtlks: list[asyncio.Lock] | None = None,
+            **kwargs,
+        ) -> tuple[tuple[int, str], str, None] | tuple[None, None, str]:
+            """The asynchronous processing function."""
+            i, data_item = item
+            response: str | None = None
+            norm_msg: str | None = None
+            err: Exception | None = None
+            err_trace: str | None = None
+
+            # Handle all exceptions
+            try:
+                assert iscoroutinefunction(self.query_func)
+                response = await self.query_func(data_item)
                 norm_msg = f"Item.{i:<10} {response:.40s}"
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
@@ -214,14 +283,16 @@ class ResponseGenerator:
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(
-            items=self._yield_dataset(overwrite=overwrite),
-            worker_kwargs=[{} for _ in range(self.n_workers)],
             process_func=process_func,
-            n_locks=1,
+            process_afunc=process_afunc,
             verbose=self.verbose,
         )
         results: list[tuple[int, str]]
-        results, failed = runner.run()
+        results, failed = runner.run(
+            items=self._yield_dataset(overwrite=overwrite),
+            worker_kwargs=[{} for _ in range(self.n_workers)],
+            n_locks=1,
+        )
         completed = len(failed) == 0
 
         # Update the file with the obtained results; all items must be updated,

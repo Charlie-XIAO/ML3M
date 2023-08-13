@@ -31,7 +31,8 @@ class BaseEvaluator:
         This class is meant to be subclassed. The methods that must be overridden
         include:
 
-        - :meth:`BaseEvaluator._aget_score`
+        - :meth:`BaseEvaluator._aget_score` (if to be used with multiple workers)
+        - :meth:`BaseEvaluator._get_score` (if to be used with a single worker)
 
     Parameters
     ----------
@@ -166,9 +167,7 @@ class BaseEvaluator:
                 reason="must be an integer >= 1 or a list of dict",
             )
 
-    async def _aget_score(
-        self, data_item: DataItemType, **kwargs
-    ) -> Real | dict[Any, Real]:
+    def _get_score(self, data_item: DataItemType, **kwargs) -> Real | dict[Any, Real]:
         """Evaluate a data item and obtain its score(s).
 
         :meta public:
@@ -197,6 +196,29 @@ class BaseEvaluator:
         Moreover, it is recommended *not* to catch the exceptions that cause the
         processing of a data item to fail, since otherwise
         :meth:`BaseEvaluator.evaluate` will not realize that the data item errors out.
+        """
+        raise NotImplementedError
+
+    async def _aget_score(
+        self, data_item: DataItemType, **kwargs
+    ) -> Real | dict[Any, Real]:
+        """Evaluate a data item and obtain its score(s).
+
+        :meta public:
+
+        This should be the asynchronous version of :meth:`BaseEvaluator._get_score`.
+        See :meth:`BaseEvaluator._get_score` for details. If the obtaining process of
+        the scores does not involving anything asynchrounous, this can simply be
+        overridden as follows:
+
+        .. code-block:: python
+
+            async def _aget_score(self, data_item, **kwargs):
+                return self._get_score(data_item, **kwargs)
+
+        .. note::
+            This method is not implemented and must be overridden in subclasses.
+            Moreover, this method must be defined as asynchronous.
         """
         raise NotImplementedError
 
@@ -266,13 +288,6 @@ class BaseEvaluator:
         eval_scores : dict
             If ``scores`` is a single real number, this returns ``{"scores": scores}``.
             Otherwise, this returns ``scores`` itself.
-
-        Raises
-        ------
-        TypeError
-            If ``scores`` is not a real number or a dictionary with real values.
-        ValueError
-            If the reserved "i" key exists in ``scores`` when it is a dictionary.
         """
         # mypy not working with numbers.Real
         if isinstance(scores, Real) and not pd.isna(
@@ -333,14 +348,59 @@ class BaseEvaluator:
         """
         mlog_path = manage_timed_logs(type(self).__name__)
 
-        async def process_func(
+        def process_func(
+            item: tuple[int, int, DataItemType], **kwargs
+        ) -> (
+            tuple[tuple[int, int, dict[Any, Real]], str, None] | tuple[None, None, str]
+        ):
+            """The sequential processing function."""
+            i, it, data_item = item
+            prefix = f"Item.{i}" if self.n_iter == 1 else f"Item/Iter.{i}/{it}"
+            eval_scores: dict[Any, Real] | None = None
+            norm_msg: str | None = None
+            err: Exception | None = None
+            err_trace: str | None = None
+
+            # Handle all exceptions
+            try:
+                scores = self._get_score(data_item, **kwargs)
+                eval_scores = self._check_scores(scores)
+                norm_msg = (
+                    f"{prefix:<20} {json.dumps(eval_scores, ensure_ascii=False):.40s}"
+                )
+            except Exception as e:
+                err, err_trace = e, traceback.format_exc()
+
+            # Write the log on demand
+            if (
+                self.logging_mode == "failed"
+                and eval_scores is None
+                or self.logging_mode == "all"
+            ):
+                mlog_item = {
+                    "time": str(datetime.now()),
+                    "index": i,
+                    "iter": it,
+                    "eval_scores": eval_scores,
+                    "norm_msg": norm_msg,
+                    "err_msg": err_trace,
+                }
+                with open(mlog_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
+
+            # Return the information based on success or failure
+            if eval_scores is not None and norm_msg is not None:
+                return (i, it, eval_scores), norm_msg, None
+            return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
+
+        async def process_afunc(
             item: tuple[int, int, DataItemType],
             addtlks: list[asyncio.Lock] | None = None,
             **kwargs,
         ) -> tuple[tuple[int, int, dict[Any, Real]], str, None] | tuple[
             None, None, str
         ]:
-            """The process function required for the asynchronous runner."""
+            """The asynchronous processing function."""
             i, it, data_item = item
             prefix = f"Item.{i}" if self.n_iter == 1 else f"Item/Iter.{i}/{it}"
             eval_scores: dict[Any, Real] | None = None
@@ -372,12 +432,8 @@ class BaseEvaluator:
                     "norm_msg": norm_msg,
                     "err_msg": err_trace,
                 }
-                if len(self._worker_kwargs) > 1:
-                    assert isinstance(addtlks, list)
-                    async with addtlks[0]:
-                        with open(mlog_path, "a", encoding="utf-8") as f:
-                            f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
-                else:
+                assert isinstance(addtlks, list)
+                async with addtlks[0]:
                     with open(mlog_path, "a", encoding="utf-8") as f:
                         f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
 
@@ -388,14 +444,16 @@ class BaseEvaluator:
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(
-            items=self._yield_dataset(overwrite=overwrite),
-            worker_kwargs=self._worker_kwargs,
             process_func=process_func,
-            n_locks=1,
+            process_afunc=process_afunc,
             verbose=self.verbose,
         )
         results: list[tuple[int, int, dict[Any, Real]]]
-        results, failed = runner.run()
+        results, failed = runner.run(
+            items=self._yield_dataset(overwrite=overwrite),
+            worker_kwargs=self._worker_kwargs,
+            n_locks=1,
+        )
         completed = len(failed) == 0
 
         # Aggregate the result if needed
@@ -730,12 +788,21 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         """
         raise NotImplementedError
 
-    async def _aget_score(
-        self, data_item: DataItemType, **kwargs
-    ) -> Real | dict[Any, Real]:
-        """:meta private:"""
+    def _prior_scoring(self, data_item: DataItemType):
+        """Get messages prior to OpenAI querying.
+
+        Parameters
+        ----------
+        data_item : DataItemType
+            The data item.
+
+        Returns
+        -------
+        messages : list of dict
+            The messages for OpenAI querying.
+        """
         sys_msg, eval_prompt = self._prompt(data_item)
-        messages = (
+        return (
             [
                 {"role": "system", "content": sys_msg},
                 {"role": "user", "content": eval_prompt},
@@ -744,7 +811,42 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             else [{"role": "user", "content": eval_prompt}]
         )
 
-        # Asynchronous query for OpenAI
+    def _post_scoring(self, completion: Any) -> Real | dict[Any, Real]:
+        """Process the OpenAI response posterior to querying.
+
+        Parameters
+        ----------
+        completion : an OpenAI completion
+            The returned OpenAI completion.
+
+        Returns
+        -------
+        scores : real or dict
+            The extracted scores, either a single score or a dictionary of subject-
+            score pairs.
+        """
+        finish_reason = completion["choices"][0]["finish_reason"]
+        if finish_reason != "stop":
+            raise ValueError(f"Model terminated by '{finish_reason}'")
+        return self._extract_scores(completion["choices"][0]["message"]["content"])
+
+    def _get_score(self, data_item: DataItemType, **kwargs) -> Real | dict[Any, Real]:
+        """:meta private:"""
+        messages = self._prior_scoring(data_item)
+        completion = openai.ChatCompletion.create(
+            model=self.model,
+            messages=messages,
+            api_key=kwargs["api_key"],
+            api_base=kwargs["api_base"],
+            **self.openai_kwargs,
+        )
+        return self._post_scoring(completion)
+
+    async def _aget_score(
+        self, data_item: DataItemType, **kwargs
+    ) -> Real | dict[Any, Real]:
+        """:meta private:"""
+        messages = self._prior_scoring(data_item)
         completion = await asyncio.wait_for(
             openai.ChatCompletion.acreate(
                 model=self.model,
@@ -755,9 +857,4 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             ),
             timeout=self.timeout,
         )
-
-        # Check whether the model has fully completed the response
-        finish_reason = completion["choices"][0]["finish_reason"]
-        if finish_reason != "stop":
-            raise ValueError(f"Model terminated by '{finish_reason}'")
-        return self._extract_scores(completion["choices"][0]["message"]["content"])
+        return self._post_scoring(completion)
