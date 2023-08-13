@@ -30,7 +30,7 @@ if sys.platform == "win32":
 
         kernel32 = windll.kernel32
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-    except Exception:
+    except Exception:  # pragma: no cover
         _color_support = False
 
 
@@ -46,4 +46,4 @@ def colored(content: Any, color: COLOR) -> str:
     """
     if _color_support:
         return f"{color.value}{content}{COLOR.DEFAULT.value}"
-    return f"{content}"
+    return f"{content}"  # pragma: no cover

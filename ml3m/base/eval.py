@@ -216,6 +216,10 @@ class BaseEvaluator:
             async def _aget_score(self, data_item, **kwargs):
                 return self._get_score(data_item, **kwargs)
 
+
+        However, note that this will cause only one worker to be actually doing all
+        the tasks because it will not give away the control of the event loop.
+
         .. note::
             This method is not implemented and must be overridden in subclasses.
             Moreover, this method must be defined as asynchronous.
