@@ -22,7 +22,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     python_requires=">=3.8",
-    install_requires=["pandas", "numpy", "openai"],
+    install_requires=["pandas", "numpy", "openai", "tqdm"],
     keywords=["python", "LLM", "evaluation"],
     classifiers=[
         "Development Status :: 1 - Planning",
