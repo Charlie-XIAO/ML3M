@@ -204,10 +204,11 @@ class ResponseGenerator:
         elif isinstance(item, list):
             self._all_data[i] = {"data": item, self.response_name: response}
         else:
+            # This is unlikely to happen if the code is correct
             raise ValueError(
                 f"Each data item must be a list or a dictionary; got '{item}' "
                 f"of type '{type(item)}'."
-            )
+            )  # pragma: no cover
 
     def generate(self, *, overwrite: bool = False) -> bool:
         """Generate responses and combine with the original dataset.
@@ -281,6 +282,9 @@ class ResponseGenerator:
                 # In that case, `self.query_func` is already validated asynchronous
                 response = await self.query_func(data_item)  # type: ignore[misc]
                 norm_msg = f"Item.{i:<10} {response:.40s}"
+                print()
+                print(colored(response, COLOR.CYAN))
+                print(colored(norm_msg, COLOR.MAGENTA))
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
@@ -332,12 +336,12 @@ class ResponseGenerator:
                     self._update_all_data_list_or_dict(i, response)
                 for i in failed_indices:
                     self._update_all_data_list_or_dict(i, None)
-                with open(self.dataset, "w", encoding="utf-8") as f:
-                    if self.fmt == "jsonl":
-                        for data_item in self._all_data:
-                            f.write(json.dumps(data_item, ensure_ascii=False) + "\n")
-                    else:  # self.fmt == "json"
-                        json.dump(self._all_data, f, ensure_ascii=False, indent=4)
+            with open(self.dataset, "w", encoding="utf-8") as f:
+                if self.fmt == "jsonl":
+                    for data_item in self._all_data:
+                        f.write(json.dumps(data_item, ensure_ascii=False) + "\n")
+                else:  # self.fmt == "json"
+                    json.dump(self._all_data, f, ensure_ascii=False, indent=4)
         else:  # self.fmt == "csv"
             assert isinstance(self._all_data, pd.DataFrame)
             for i, response in result_responses.items():
