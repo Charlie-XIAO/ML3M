@@ -186,6 +186,29 @@ class ResponseGenerator:
                 ) in self._all_data.iterrows():
                     yield i, data_item
 
+    def _update_all_data_list_or_dict(self, i: int, response: str | None) -> None:
+        """Update a certain index in the stored data.
+
+        This is only used when ``fmt="jsonl"`` or ``fmt="json"``.
+
+        Parameters
+        ----------
+        i : int
+            The index to update.
+        response : str or None
+            The response to use for update.
+        """
+        item = self._all_data[i]
+        if isinstance(item, dict):
+            item[self.response_name] = response
+        elif isinstance(item, list):
+            self._all_data[i] = {"data": item, self.response_name: response}
+        else:
+            raise ValueError(
+                f"Each data item must be a list or a dictionary; got '{item}' "
+                f"of type '{type(item)}'."
+            )
+
     def generate(self, *, overwrite: bool = False) -> bool:
         """Generate responses and combine with the original dataset.
 
@@ -291,6 +314,7 @@ class ResponseGenerator:
             verbose=self.verbose,
         )
         results: list[tuple[int, str]]
+        failed: list[tuple[int, DataItemType]]
         results, failed = runner.run(
             items=self._yield_dataset(overwrite=overwrite),
             worker_kwargs=[{} for _ in range(self.n_workers)],
@@ -301,28 +325,22 @@ class ResponseGenerator:
         # Update the file with the obtained results; all items must be updated,
         # including the failing ones, which should be marked as None
         result_responses = dict(results)
+        failed_indices = [item[0] for item in failed]
         if self.fmt == "jsonl" or self.fmt == "json":
-            for i, item in enumerate(self._all_data):  # list of dict or list of list
-                response = result_responses[i] if i in result_responses else None
-                if isinstance(item, dict):
-                    item[self.response_name] = response
-                elif isinstance(item, list):
-                    self._all_data[i] = {"data": item, self.response_name: response}
-                else:
-                    raise ValueError(
-                        f"Each data item must be a list or a dictionary; got '{item}' "
-                        f"of type '{type(item)}'."
-                    )
-            with open(self.dataset, "w", encoding="utf-8") as f:
-                if self.fmt == "jsonl":
-                    for data_item in self._all_data:
-                        f.write(json.dumps(data_item, ensure_ascii=False) + "\n")
-                else:  # self.fmt == "json"
-                    json.dump(self._all_data, f, ensure_ascii=False, indent=4)
+            if len(result_responses) != 0:
+                for i, response in result_responses.items():
+                    self._update_all_data_list_or_dict(i, response)
+                for i in failed_indices:
+                    self._update_all_data_list_or_dict(i, None)
+                with open(self.dataset, "w", encoding="utf-8") as f:
+                    if self.fmt == "jsonl":
+                        for data_item in self._all_data:
+                            f.write(json.dumps(data_item, ensure_ascii=False) + "\n")
+                    else:  # self.fmt == "json"
+                        json.dump(self._all_data, f, ensure_ascii=False, indent=4)
         else:  # self.fmt == "csv"
             assert isinstance(self._all_data, pd.DataFrame)
-            for i in self._all_data.index:
-                response = result_responses[i] if i in result_responses else None
+            for i, response in result_responses.items():
                 self._all_data.at[i, self.response_name] = response
             self._all_data.to_csv(self.dataset, index=False)
 

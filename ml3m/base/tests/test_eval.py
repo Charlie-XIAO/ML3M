@@ -47,6 +47,8 @@ result_df_5_2 = pd.DataFrame(
 
 openai_configuration = [{"key": "sk-xxx", "base": None, "n_workers": 30}]
 
+openai_configuration_1w = [{"key": "sk-xxx", "base": None, "n_workers": 1}]
+
 
 @pytest.fixture(scope="module")
 def prepare(request, storage):
@@ -85,6 +87,14 @@ def prepare(request, storage):
         json.dump(openai_configuration, f, indent=4, ensure_ascii=False)
     paths["openai_configuration"] = save_path
 
+    # Make file for `openai_configuration_1w`
+    save_path = os.path.join(
+        storage, f"openai_configuration_1w__{request.keywords.node.name}.json"
+    )
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump(openai_configuration_1w, f, indent=4, ensure_ascii=False)
+    paths["openai_configuration_1w"] = save_path
+
     return paths
 
 
@@ -99,7 +109,7 @@ class NormalBaseEvaluator(BaseEvaluator):
     """Extends the base evaluator.
 
     This can return random scores, fail on all items, or fail on a certain item based
-    on ``data_item["instruction"]``.
+    on the instruction field.
     """
 
     def __init__(
@@ -136,7 +146,6 @@ class NormalBaseEvaluator(BaseEvaluator):
                 and data_item["instruction"] == self.mode[19:]
             ):
                 raise ValueError
-            print(self.mode)
             if len(self.subjects) == 1:
                 return random.randint(0, 100)
             return {subject: random.randint(0, 100) for subject in self.subjects}
@@ -250,8 +259,8 @@ class NormalBaseOpenAIEvaluator(BaseOpenAIEvaluator):
         return int(reply)
 
 
-async def mock_openai_chatcompletion_acreate(*args, **kwargs):
-    """Mock function for openai.ChatCompletion.acreate."""
+def mock_openai_chatcompletion_create(*args, **kwargs):
+    """Mock function for openai.ChatCompletion.create."""
     for item in kwargs["messages"]:
         if item["role"] == "user":
             target_msg = item["content"]
@@ -261,7 +270,6 @@ async def mock_openai_chatcompletion_acreate(*args, **kwargs):
     reference, actual = mat.group(1), mat.group(2)
     score = (actual in reference) * 100
 
-    await asyncio.sleep(0.01)
     return {
         "choices": [
             {
@@ -273,8 +281,14 @@ async def mock_openai_chatcompletion_acreate(*args, **kwargs):
     }
 
 
-async def mock_openai_chatcompletion_acreate_fail2stop(*args, **kwargs):
+async def mock_openai_chatcompletion_acreate(*args, **kwargs):
     """Mock function for openai.ChatCompletion.acreate."""
+    await asyncio.sleep(0.01)
+    return mock_openai_chatcompletion_create(*args, **kwargs)
+
+
+def mock_openai_chatcompletion_create_fail2stop(*args, **kwargs):
+    """Mock function for openai.ChatCompletion.create."""
     return {
         "choices": [
             {
@@ -284,6 +298,12 @@ async def mock_openai_chatcompletion_acreate_fail2stop(*args, **kwargs):
         ],
         "usage": {f"{term}_tokens": 1 for term in ["completion", "prompt", "total"]},
     }
+
+
+async def mock_openai_chatcompletion_acreate_fail2stop(*args, **kwargs):
+    """Mock function for openai.ChatCompletion.acreate."""
+    await asyncio.sleep(0.01)
+    return mock_openai_chatcompletion_create_fail2stop(*args, **kwargs)
 
 
 #######################################################################################
@@ -315,7 +335,11 @@ class TestBaseEvaluator:
         prepare,
         request,
     ):
-        """Test that evaluator._result_df and the written csv are the same."""
+        """Test that evaluator._result_df and the written csv are the same.
+
+        This serves as a basis so that the other tests do not need to I/O to check the
+        results but instead directly read the attribute.
+        """
         dataset = prepare[f"dataset_2__{fmt}"]
         save_path = os.path.join(
             storage, f"save_path__{request.keywords.node.name}.csv"
@@ -352,7 +376,7 @@ class TestBaseEvaluator:
         -> Pass one of the data items
         -> Pass all data items
         -> Evaluate again (should make no change)
-        -> Fail all data items on the new subjects
+        -> Fail all data items on the new subjects (should make no change)
         -> Pass one of the data items on the new subjects
         -> Evaluate on old subject(s) again (should make no change)
         -> Pass all data items on the new subjects
@@ -725,17 +749,21 @@ class TestBaseEvaluator:
 class TestBaseOpenAIEvaluator:
     """Testing ml3m.base.BaseOpenAIEvaluator."""
 
+    @pytest.mark.parametrize(
+        "config_name", ["openai_configuration", "openai_configuration_1w"]
+    )
     def test_base_openai_evaluator_evaluate_basics(
-        self, storage, prepare, mocker, request
+        self, config_name, storage, prepare, mocker, request
     ):
         """Test the basic evaluator functionalities."""
         dataset = prepare["dataset_2__jsonl"]
-        openai_config = prepare["openai_configuration"]
+        openai_config = prepare[config_name]
         save_path = os.path.join(
             storage, f"save_path__{request.keywords.node.name}.csv"
         )
 
-        patcher = mocker.patch("ml3m.base.eval.openai.ChatCompletion.acreate")
+        patcher_create = mocker.patch("ml3m.base.eval.openai.ChatCompletion.create")
+        patcher_acreate = mocker.patch("ml3m.base.eval.openai.ChatCompletion.acreate")
         evaluator = NormalBaseOpenAIEvaluator(
             dataset=dataset,
             save_path=save_path,
@@ -744,7 +772,8 @@ class TestBaseOpenAIEvaluator:
         )
 
         # Patch to always fail with stop_reason != "stop"
-        patcher.side_effect = mock_openai_chatcompletion_acreate_fail2stop
+        patcher_create.side_effect = mock_openai_chatcompletion_create_fail2stop
+        patcher_acreate.side_effect = mock_openai_chatcompletion_acreate_fail2stop
         completed = evaluator.evaluate()
         assert not completed
 
@@ -753,7 +782,8 @@ class TestBaseOpenAIEvaluator:
         assert len(df.columns) == 0
 
         # Patch to respond normally
-        patcher.side_effect = mock_openai_chatcompletion_acreate
+        patcher_create.side_effect = mock_openai_chatcompletion_create
+        patcher_acreate.side_effect = mock_openai_chatcompletion_acreate
         completed = evaluator.evaluate()
         assert completed
 
