@@ -400,8 +400,9 @@ class TestBaseEvaluator:
         assert not completed
 
         df = evaluator._result_df
-        assert len(df) == 0
-        assert len(df.columns) == 0
+        assert list(df.index) == [0, 1]
+        assert list(df.columns) == subjects
+        assert df.isna().all().all()
 
         # This should pass the second data item but fail the first
         item_0_instruction = dataset_2[0]["instruction"]
@@ -411,8 +412,7 @@ class TestBaseEvaluator:
 
         df = evaluator._result_df
         item_1_scores = df.loc[1, :]
-        assert list(df.index) == [1]
-        assert list(df.columns) == subjects
+        assert not item_1_scores.isna().any()
 
         # This should pass all of the data items
         evaluator.mode = "random"
@@ -421,8 +421,6 @@ class TestBaseEvaluator:
 
         df = evaluator._result_df
         items_scores = df.copy()
-        assert list(df.index) == [0, 1]
-        assert list(df.columns) == subjects
         assert not df.isna().any().any()
         assert_series_equal(item_1_scores, df.loc[1, :])
 
@@ -447,7 +445,9 @@ class TestBaseEvaluator:
         assert not completed
 
         df = evaluator2._result_df
-        assert_frame_equal(items_scores, df)
+        assert list(df.columns) == [*subjects, *new_subjects]
+        assert df.loc[:, new_subjects].isna().all().all()
+        assert_frame_equal(items_scores, df.loc[:, subjects])
 
         # This should pass the second data item but fail the first on the new subjects
         evaluator2.mode = f"err_on_instruction_{item_0_instruction}"
@@ -457,9 +457,8 @@ class TestBaseEvaluator:
         df = evaluator2._result_df
         item_1_scores = df.loc[1, :]
         new_items_scores = df.copy()
-        assert pd.isna(df.loc[0, new_subjects]).all()
-        assert not pd.isna(df.loc[1, new_subjects]).any()
-        assert list(df.columns) == [*subjects, *new_subjects]
+        assert df.loc[0, new_subjects].isna().all()
+        assert not df.loc[1, new_subjects].isna().any()
         assert_frame_equal(items_scores, df[subjects])
 
         # This should not modify the evaluation results since it is using old subjects
@@ -488,6 +487,90 @@ class TestBaseEvaluator:
 
         df = evaluator2._result_df
         assert_frame_equal(new_items_scores, df)
+
+    @pytest.mark.parametrize("fmt", ["jsonl", "json", "csv"])
+    @pytest.mark.parametrize("subjects", [["score1"], ["score2", "score3"]])
+    @pytest.mark.parametrize("new_subjects", [["score4"], ["score5", "score6"]])
+    @pytest.mark.parametrize("workers", [1, 3])
+    def test_base_evaluator_overwrite(
+        self, fmt, subjects, new_subjects, workers, storage, prepare, request
+    ):
+        """Test overwrite parameter of evaluate.
+
+        Pass all data items
+        -> Overwrite and fail all data items
+        -> Overwrite and pass all data items
+        -> Overwrite and pass all data items on the new subjects
+        -> Overwrite and fail all data items on the new subjects
+        -> Pass all data items on the new subjects
+        -> Overwrite and pass all data items on the new subjects
+        """
+        dataset = prepare[f"dataset_2__{fmt}"]
+        save_path = os.path.join(
+            storage, f"save_path__{request.keywords.node.name}.csv"
+        )
+
+        # Preparation: Pass all data items
+        evaluator = NormalBaseEvaluator(
+            dataset=dataset,
+            save_path=save_path,
+            subjects=subjects,
+            fmt=fmt,
+            workers=workers,
+        )
+        evaluator.evaluate()
+        df_ref = evaluator._result_df
+
+        # Overwrite and fail all data items
+        evaluator.mode = "all_err"
+        completed = evaluator.evaluate(overwrite=True)
+        assert not completed
+
+        df = evaluator._result_df
+        assert df.isna().all().all()
+
+        # Overwrite and pass all data items
+        evaluator.mode = "random"
+        evaluator.evaluate(overwrite=True)
+        df_ref = evaluator._result_df
+
+        # Overwrite and pass all data items on the new subjects
+        completed = evaluator.evaluate(overwrite=True)
+        assert completed
+
+        df = evaluator._result_df
+        with pytest.raises(AssertionError):
+            assert_frame_equal(df, df_ref)
+        df_ref = df
+
+        # Overwrite and fail all data items on the new subjects
+        evaluator2 = NormalBaseEvaluator(
+            dataset=dataset,
+            save_path=save_path,
+            subjects=new_subjects,
+            fmt=fmt,
+            workers=workers,
+            mode="all_err",
+        )
+        completed = evaluator2.evaluate(overwrite=True)
+        assert not completed
+
+        df = evaluator2._result_df
+        assert_frame_equal(df.loc[:, subjects], df_ref)
+        assert df.loc[:, new_subjects].isna().all().all()
+
+        # Preparation: Pass all data items on the new subjects
+        evaluator2.mode = "random"
+        evaluator2.evaluate()
+        df_ref = evaluator2._result_df
+
+        # Overwrite and pass all data items on the new subjects
+        completed = evaluator2.evaluate(overwrite=True)
+        assert completed
+
+        df = evaluator2._result_df
+        with pytest.raises(AssertionError):
+            assert_frame_equal(df, df_ref)
 
     @pytest.mark.parametrize("fmt", ["jsonl", "json", "csv"])
     @pytest.mark.parametrize("workers", [1, 3])
@@ -565,6 +648,16 @@ class TestBaseEvaluator:
         df = evaluator._result_df
         assert completed
 
+        evaluator = NormalBaseEvaluator(
+            dataset=dataset,
+            save_path=save_path,
+            subjects=["score"],
+            fmt=fmt,
+        )
+        completed = evaluator.evaluate()
+        assert completed
+        assert_frame_equal(evaluator._result_df, df)
+
         evaluator2 = NormalBaseEvaluator(
             dataset=dataset,
             save_path=save_path,
@@ -578,7 +671,9 @@ class TestBaseEvaluator:
         assert list(df2.columns) == ["score", "score1", "score2"]
         assert not df2.isna().any().any()
 
-        # score1 will stay the same, but score should be overwritten
+        # score1 will stay the same, but score should be overwritten even if overwrite
+        # is not specified; this is because score2 is missing while score and score2
+        # are treated as a whole in the second evaluator
         # Since the evaluator is in random mode, most probably the overwritten part
         # will not be the same as what it previously was
         assert_series_equal(df.loc[:, "score1"], df2.loc[:, "score1"])
@@ -778,8 +873,9 @@ class TestBaseOpenAIEvaluator:
         assert not completed
 
         df = evaluator._result_df
-        assert len(df) == 0
-        assert len(df.columns) == 0
+        expected = pd.DataFrame(index=pd.Index([0, 1], name="i"), columns=["score"])
+        expected["score"] = None
+        assert_frame_equal(df, expected, check_dtype=False)
 
         # Patch to respond normally
         patcher_create.side_effect = mock_openai_chatcompletion_create
@@ -788,9 +884,8 @@ class TestBaseOpenAIEvaluator:
         assert completed
 
         df = evaluator._result_df
-        expected = pd.DataFrame(
-            [[100], [0]], index=pd.Index([0, 1], name="i"), columns=["score"]
-        )
+        expected.at[0, "score"] = 100
+        expected.at[1, "score"] = 0
         assert_frame_equal(df, expected, check_dtype=False)
 
     def test_base_openai_evaluator_invalid_init(self, storage, prepare, request):

@@ -231,6 +231,11 @@ class BaseEvaluator:
     ) -> Generator[tuple[int, int, DataItemType], Any, None]:
         """Yield the indices and data items to be done.
 
+        Parameters
+        ----------
+        overwrite : bool, default=False
+            If ``True``, all existing indices will be ignored.
+
         Yield
         -----
         i : int
@@ -248,13 +253,14 @@ class BaseEvaluator:
         else:
             df = pd.read_csv(self.save_path)
             if all(subject in df.columns for subject in self.subjects):
-                existing_indices = list(
-                    df[
-                        ~df[list(self.subjects)]  # type: ignore[type-var]
-                        .isna()
-                        .any(axis=1)
-                    ].loc[:, "i"]
-                )
+                if not overwrite:
+                    existing_indices = list(
+                        df[
+                            ~df[list(self.subjects)]  # type: ignore[type-var]
+                            .isna()
+                            .any(axis=1)
+                        ].loc[:, "i"]
+                    )
         self._result_df = df.set_index("i")
 
         # Yield the indices and corresponding data items
@@ -453,6 +459,7 @@ class BaseEvaluator:
             verbose=self.verbose,
         )
         results: list[tuple[int, int, dict[Any, Real]]]
+        failed: list[tuple[int, int, DataItemType]]
         results, failed = runner.run(
             items=self._yield_dataset(overwrite=overwrite),
             worker_kwargs=self._worker_kwargs,
@@ -462,6 +469,7 @@ class BaseEvaluator:
 
         # Aggregate the result if needed
         new_df: pd.DataFrame
+        failed_indices = [item[0] for item in failed]
         if self.n_iter == 1:
             i2scores = {i: scores for i, _, scores in results}
             new_df = pd.DataFrame(i2scores).T
@@ -477,12 +485,13 @@ class BaseEvaluator:
                 )
 
         # Update the file with the obtained results
-        cols = new_df.columns
         for i, row in new_df.iterrows():
             # TODO: maybe resolve: error: Invalid index type "tuple[Hashable | None,
             # Index]" for "_LocIndexerFrame"; expected type ...
             # not sure whether the current operation is perfectly valid in all cases
-            self._result_df.loc[i, cols] = row  # type: ignore[index]
+            self._result_df.loc[i, self.subjects] = row  # type: ignore[index]
+        for i in failed_indices:
+            self._result_df.loc[i, self.subjects] = None
         self._result_df = self._result_df.convert_dtypes().sort_index()
         self._result_df.reset_index(names="i").to_csv(self.save_path, index=False)
 

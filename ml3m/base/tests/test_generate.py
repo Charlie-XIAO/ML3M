@@ -288,9 +288,13 @@ class TestResponseGenerator:
 
         results = generator._all_data
         if fmt == "json" or fmt == "jsonl":
-            assert results == orig_dataset_2
+            expected = copy.deepcopy(orig_dataset_2)
+            expected[0]["response"] = None
+            expected[1]["response"] = None
+            assert results == expected
         else:  # fmt == "csv"
             expected_df = pd.DataFrame(orig_dataset_2)
+            expected_df["response"] = None
             assert_frame_equal(expected_df, results, check_dtype=False)
 
         # This should pass the second data item but fail the firrst
@@ -303,12 +307,9 @@ class TestResponseGenerator:
 
         results = generator._all_data
         if fmt == "json" or fmt == "jsonl":
-            expected = copy.deepcopy(orig_dataset_2)
-            expected[0]["response"] = None
             expected[1]["response"] = "I don't know."
             assert results == expected
         else:  # fmt == "csv"
-            expected_df.at[0, "response"] = None
             expected_df.at[1, "response"] = "I don't know."
             assert_frame_equal(expected_df, results, check_dtype=False)
 
@@ -343,8 +344,11 @@ class TestResponseGenerator:
 
         results = generator2._all_data
         if fmt == "json" or fmt == "jsonl":
+            expected[0]["new_response"] = None
+            expected[1]["new_response"] = None
             assert results == expected
         else:  # fmt == "csv"
+            expected_df["new_response"] = None
             assert_frame_equal(expected_df, results, check_dtype=False)
 
         # This should pass the second item but fail the first with the new response
@@ -357,11 +361,9 @@ class TestResponseGenerator:
 
         results = generator2._all_data
         if fmt == "json" or fmt == "jsonl":
-            expected[0]["new_response"] = None
             expected[1]["new_response"] = "I don't know."
             assert results == expected
         else:  # fmt == "csv"
-            expected_df.at[0, "new_response"] = None
             expected_df.at[1, "new_response"] = "I don't know."
             assert_frame_equal(expected_df, results, check_dtype=False)
 
@@ -444,7 +446,11 @@ class TestResponseGenerator:
         assert not completed
 
         results = generator._all_data
-        assert results == orig_dataset_l2
+        expected = [
+            {"data": orig_dataset_l2[0], "response": None},
+            {"data": orig_dataset_l2[1], "response": None},
+        ]
+        assert results == expected
 
         # This should pass the second data item but fail the firrst
         item_0_instruction = orig_dataset_l2[0][0]
@@ -455,10 +461,7 @@ class TestResponseGenerator:
         assert not completed
 
         results = generator._all_data
-        expected = [
-            {"data": orig_dataset_l2[0], "response": None},
-            {"data": orig_dataset_l2[1], "response": "I don't know."},
-        ]
+        expected[1]["response"] = "I don't know."
         assert results == expected
 
         # This should pass all of the data items
@@ -484,11 +487,12 @@ class TestResponseGenerator:
         assert not completed
 
         results = generator2._all_data
+        expected[0]["new_response"] = None
+        expected[1]["new_response"] = None
         assert results == expected
 
         # This should pass the second item but fail the first with the new response
         # name
-        print("\033[35mCHECK THIS\033[0m")
         generator2 = make_generator_by_mode(
             f"err_on_index.0_{item_0_instruction}", "new_response"
         )
@@ -496,7 +500,6 @@ class TestResponseGenerator:
         assert not completed
 
         results = generator2._all_data
-        expected[0]["new_response"] = None
         expected[1]["new_response"] = "I don't know."
         assert results == expected
 
@@ -522,6 +525,212 @@ class TestResponseGenerator:
         assert completed
 
         results = generator2._all_data
+        assert results == expected
+
+    @pytest.mark.parametrize("fmt", ["jsonl", "json", "csv"])
+    @pytest.mark.parametrize(
+        "n_workers,query_func",
+        [(1, query_func_fixed), (3, query_afunc_fixed)],
+    )
+    def test_response_generator_overwrite(
+        self, fmt, n_workers, query_func, storage, prepare, request
+    ):
+        """Test overwrite parameter of evaluate.
+
+        Pass all data items
+        -> Overwrite and fail all data items
+        -> Overwrite and pass all data items
+        -> Overwrite and pass all data items with the new response name
+        -> Overwrite and fail all data items with the new response name
+        -> Pass all data items with the new response name
+        -> Overwrite and pass all data items with the new response name
+        """
+        orig_dataset = prepare[f"orig_dataset_2__{fmt}"]
+        dataset = os.path.join(storage, f"dataset__{request.keywords.node.name}.{fmt}")
+
+        def make_generator_by_mode(mode, response_name, response):
+            """Convenient function for making a generator based on mode."""
+            return ResponseGenerator(
+                orig_dataset=orig_dataset,
+                dataset=dataset,
+                query_func=partial(query_func, response=response, mode=mode),
+                response_name=response_name,
+                fmt=fmt,
+                n_workers=n_workers,
+            )
+
+        # Preparation: Pass all data items
+        generator = make_generator_by_mode("normal", "response", "a")
+        generator.generate()
+
+        # Overwrite and fail all data items
+        generator = make_generator_by_mode("all_err", "response", "b")
+        completed = generator.generate(overwrite=True)
+        assert not completed
+
+        results = generator._all_data
+        if fmt == "json" or fmt == "jsonl":
+            expected = copy.deepcopy(orig_dataset_2)
+            expected[0]["response"] = None
+            expected[1]["response"] = None
+            assert results == expected
+        else:  # fmt == "csv"
+            expected_df = pd.DataFrame(orig_dataset_2)
+            expected_df["response"] = None
+            assert_frame_equal(expected_df, results, check_dtype=False)
+
+        # Overwrite and pass all data items
+        generator = make_generator_by_mode("normal", "response", "b")
+        completed = generator.generate(overwrite=True)
+        assert completed
+
+        results = generator._all_data
+        if fmt == "json" or fmt == "jsonl":
+            expected[0]["response"] = "b"
+            expected[1]["response"] = "b"
+            assert results == expected
+        else:  # fmt == "csv"
+            expected_df["response"] = "b"
+            assert_frame_equal(expected_df, results, check_dtype=False)
+
+        # Overwrite and pass all data items with the new response name
+        generator2 = make_generator_by_mode("normal", "new_response", "c")
+        completed = generator2.generate(overwrite=True)
+        assert completed
+
+        results = generator2._all_data
+        if fmt == "json" or fmt == "jsonl":
+            expected[0]["new_response"] = "c"
+            expected[1]["new_response"] = "c"
+            assert results == expected
+        else:  # fmt == "csv"
+            expected_df["new_response"] = "c"
+            assert_frame_equal(expected_df, results, check_dtype=False)
+
+        # Overwrite and fail all data items with the new response name
+        generator2 = make_generator_by_mode("all_err", "new_response", "d")
+        completed = generator2.generate(overwrite=True)
+        assert not completed
+
+        results = generator2._all_data
+        if fmt == "json" or fmt == "jsonl":
+            expected[0]["new_response"] = None
+            expected[1]["new_response"] = None
+            assert results == expected
+        else:  # fmt == "csv"
+            expected_df["new_response"] = None
+            assert_frame_equal(expected_df, results, check_dtype=False)
+
+        # Preparation: Pass all data items with the new response name
+        generator2 = make_generator_by_mode("normal", "new_response", "d")
+        generator2.generate()
+
+        # Overwrite and pass all data items with the new response name
+        generator2 = make_generator_by_mode("normal", "new_response", "e")
+        completed = generator2.generate(overwrite=True)
+        assert completed
+
+        results = generator2._all_data
+        if fmt == "json" or fmt == "jsonl":
+            expected[0]["new_response"] = "e"
+            expected[1]["new_response"] = "e"
+            assert results == expected
+        else:  # fmt == "csv"
+            expected_df["new_response"] = "e"
+            assert_frame_equal(expected_df, results, check_dtype=False)
+
+    @pytest.mark.parametrize("fmt", ["jsonl", "json"])
+    @pytest.mark.parametrize(
+        "n_workers,query_func",
+        [(1, query_func_fixed), (3, query_afunc_fixed)],
+    )
+    def test_response_generator_overwrite_list(
+        self, fmt, n_workers, query_func, storage, prepare, request
+    ):
+        """Test overwrite parameter of evaluate.
+
+        Pass all data items
+        -> Overwrite and fail all data items
+        -> Overwrite and pass all data items
+        -> Overwrite and pass all data items with the new response name
+        -> Overwrite and fail all data items with the new response name
+        -> Pass all data items with the new response name
+        -> Overwrite and pass all data items with the new response name
+
+        This is the special case where each data item is a list.
+        """
+        orig_dataset = prepare[f"orig_dataset_l2__{fmt}"]
+        dataset = os.path.join(storage, f"dataset__{request.keywords.node.name}.{fmt}")
+
+        def make_generator_by_mode(mode, response_name, response):
+            """Convenient function for making a generator based on mode."""
+            return ResponseGenerator(
+                orig_dataset=orig_dataset,
+                dataset=dataset,
+                query_func=partial(query_func, response=response, mode=mode),
+                response_name=response_name,
+                fmt=fmt,
+                n_workers=n_workers,
+            )
+
+        # Preparation: Pass all data items
+        generator = make_generator_by_mode("normal", "response", "a")
+        generator.generate()
+
+        # Overwrite and fail all data items
+        generator = make_generator_by_mode("all_err", "response", "b")
+        completed = generator.generate(overwrite=True)
+        assert not completed
+
+        results = generator._all_data
+        expected = [
+            {"data": orig_dataset_l2[0], "response": None},
+            {"data": orig_dataset_l2[1], "response": None},
+        ]
+        assert results == expected
+
+        # Overwrite and pass all data items
+        generator = make_generator_by_mode("normal", "response", "b")
+        completed = generator.generate(overwrite=True)
+        assert completed
+
+        results = generator._all_data
+        expected[0]["response"] = "b"
+        expected[1]["response"] = "b"
+        assert results == expected
+
+        # Overwrite and pass all data items with the new response name
+        generator2 = make_generator_by_mode("normal", "new_response", "c")
+        completed = generator2.generate(overwrite=True)
+        assert completed
+
+        results = generator2._all_data
+        expected[0]["new_response"] = "c"
+        expected[1]["new_response"] = "c"
+        assert results == expected
+
+        # Overwrite and fail all data items with the new response name
+        generator2 = make_generator_by_mode("all_err", "new_response", "d")
+        completed = generator2.generate(overwrite=True)
+        assert not completed
+
+        results = generator2._all_data
+        expected[0]["new_response"] = None
+        expected[1]["new_response"] = None
+        assert results == expected
+
+        # Preparation: Pass all data items with the new response name
+        generator2 = make_generator_by_mode("normal", "new_response", "d")
+        generator2.generate()
+
+        # Overwrite and pass all data items with the new response name
+        generator2 = make_generator_by_mode("normal", "new_response", "e")
+        completed = generator2.generate(overwrite=True)
+        assert completed
+
+        results = generator2._all_data
+        expected[0]["new_response"] = "e"
+        expected[1]["new_response"] = "e"
         assert results == expected
 
     def test_response_generator_invalid_init(self, storage, prepare, request):
