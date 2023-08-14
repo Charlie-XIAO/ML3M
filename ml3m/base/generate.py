@@ -229,6 +229,7 @@ class ResponseGenerator:
         def process_func(item: tuple[int, DataItemType], **kwargs):
             """The sequential processing function."""
             i, data_item = item
+            prefix = f"Item.{i}"
             response: str | None = None
             norm_msg: str | None = None
             err: Exception | None = None
@@ -239,7 +240,10 @@ class ResponseGenerator:
                 # `process_func` should be called only when using a single worker
                 # In that case, `self.query_func` is already validated synchrnous
                 response = self.query_func(data_item)
-                norm_msg = f"Item.{i:<10} {response:.40s}"
+                norm_msg = prefix
+                if self.verbose >= 3:
+                    norm_msg += f"\n{colored('Item:', COLOR.GREEN)}\n{item}"
+                norm_msg += f"\n{colored('Response:', COLOR.GREEN)}\n{response}"
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
@@ -262,7 +266,7 @@ class ResponseGenerator:
             # Return the information based on success or failure
             if response is not None and norm_msg is not None:
                 return (i, response), norm_msg, None
-            return None, None, f"Item.{i:<10} {type(err).__name__}: {err!s:.30s}"
+            return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
 
         async def process_afunc(
             item: tuple[int, DataItemType],
@@ -271,6 +275,7 @@ class ResponseGenerator:
         ) -> tuple[tuple[int, str], str, None] | tuple[None, None, str]:
             """The asynchronous processing function."""
             i, data_item = item
+            prefix = f"Item.{i}"
             response: str | None = None
             norm_msg: str | None = None
             err: Exception | None = None
@@ -281,7 +286,10 @@ class ResponseGenerator:
                 # `process_afunc` should be called only when using multiple workers
                 # In that case, `self.query_func` is already validated asynchronous
                 response = await self.query_func(data_item)  # type: ignore[misc]
-                norm_msg = f"Item.{i:<10} {response:.40s}"
+                norm_msg = prefix
+                if self.verbose >= 3:
+                    norm_msg += f"\n{colored('Item:', COLOR.GREEN)}\n{item}"
+                norm_msg += f"\n{colored('Response:', COLOR.GREEN)}\n{response}"
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
@@ -306,7 +314,7 @@ class ResponseGenerator:
             # Return the information based on success or failure
             if response is not None and norm_msg is not None:
                 return (i, response), norm_msg, None
-            return None, None, f"Item.{i:<10} {type(err).__name__}: {err!s:.30s}"
+            return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(

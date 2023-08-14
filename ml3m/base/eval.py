@@ -375,8 +375,12 @@ class BaseEvaluator:
             try:
                 scores = self._get_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
-                norm_msg = (
-                    f"{prefix:<20} {json.dumps(eval_scores, ensure_ascii=False):.40s}"
+                norm_msg = prefix
+                if self.verbose >= 3:
+                    norm_msg += f"\n{colored('Item:', COLOR.GREEN)}\n{item}"
+                norm_msg += (
+                    f"\n{colored('Scores:', COLOR.GREEN)}\n"
+                    f"{json.dumps(eval_scores, ensure_ascii=False)}"
                 )
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
@@ -422,8 +426,12 @@ class BaseEvaluator:
             try:
                 scores = await self._aget_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
-                norm_msg = (
-                    f"{prefix:<20} {json.dumps(eval_scores, ensure_ascii=False):.40s}"
+                norm_msg = prefix
+                if self.verbose >= 3:
+                    norm_msg += f"\n{colored('Item:', COLOR.GREEN)}\n{item}"
+                norm_msg += (
+                    f"\n{colored('Scores:', COLOR.GREEN)}\n"
+                    f"{json.dumps(eval_scores, ensure_ascii=False)}"
                 )
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()

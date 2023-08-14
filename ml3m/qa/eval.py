@@ -309,9 +309,7 @@ class QaMetricEvaluator(BaseEvaluator):
             verbose=verbose,
         )
 
-    async def _aget_score(
-        self, data_item: DataItemType, **kwargs
-    ) -> Real | dict[Any, Real]:
+    def _get_score(self, data_item: DataItemType, **kwargs) -> Real | dict[Any, Real]:
         """:meta private:"""
         actual, expected = self.info_func(data_item)
         scores = {}
@@ -322,3 +320,9 @@ class QaMetricEvaluator(BaseEvaluator):
 
         # mypy not working with numbers.Real
         return scores  # type: ignore[return-value]
+
+    async def _aget_score(
+        self, data_item: DataItemType, **kwargs
+    ) -> Real | dict[Any, Real]:
+        """:meta private:"""
+        return self._get_score(data_item, **kwargs)

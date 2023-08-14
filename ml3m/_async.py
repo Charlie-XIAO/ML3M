@@ -49,7 +49,7 @@ class AsyncRunner:
             reason as described in ``process_func``.
     verbose : int, default=1
         The verbosity level of the processing. For level 0, only a progress bar will be
-        displayed. For level 1, the errored items will also be displayed. For levels
+        displayed. For level 1, the errored items will also be displayed. For level 2
         higher than 2, all items will be displayed.
     """
 

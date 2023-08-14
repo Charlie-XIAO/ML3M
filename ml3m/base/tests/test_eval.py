@@ -321,7 +321,7 @@ class TestBaseEvaluator:
     @pytest.mark.parametrize("workers", [1, 3])
     @pytest.mark.parametrize("n_iter,agg_method", [(1, None), (3, "sum"), (3, "mode")])
     @pytest.mark.parametrize("logging_mode", ["none", "all", "failed"])
-    @pytest.mark.parametrize("verbose", [0, 1, 2])
+    @pytest.mark.parametrize("verbose", [0, 1, 2, 3])
     def test_base_evaluator_result_versus_written(
         self,
         fmt,

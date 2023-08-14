@@ -143,7 +143,7 @@ class TestResponseGenerator:
     )
     @pytest.mark.parametrize("response_name", ["response", "model_response"])
     @pytest.mark.parametrize("logging_mode", ["none", "all", "failed"])
-    @pytest.mark.parametrize("verbose", [0, 1, 2])
+    @pytest.mark.parametrize("verbose", [0, 1, 2, 3])
     def test_response_generator_result_versus_written(
         self,
         query_func,
@@ -201,7 +201,7 @@ class TestResponseGenerator:
     )
     @pytest.mark.parametrize("response_name", ["response", "model_response"])
     @pytest.mark.parametrize("logging_mode", ["none", "all", "failed"])
-    @pytest.mark.parametrize("verbose", [0, 1, 2])
+    @pytest.mark.parametrize("verbose", [0, 1, 2, 3])
     def test_response_generator_result_versus_written_list(
         self,
         query_func,
