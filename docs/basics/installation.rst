@@ -21,3 +21,10 @@ versions and dependencies:
 .. code-block::
 
     python -c "import ml3m; ml3m.show_versions()"
+
+Since this package is still unstable and may frequently have new releases, you can
+always keep up whenever there is a new version available:
+
+.. code-block::
+
+    pip install --upgrade ml3m

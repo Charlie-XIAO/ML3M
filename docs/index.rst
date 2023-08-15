@@ -15,6 +15,8 @@ Welcome to ml3m's documentation!
    :caption: Getting Started
 
    basics/installation
+   basics/generators
+   basics/evaluators
 
 
 .. toctree::
@@ -26,10 +28,3 @@ Welcome to ml3m's documentation!
    ml3m.mcq <modules/ml3m.mcq>
    ml3m.qa <modules/ml3m.qa>
    ml3m.utils.openai <modules/ml3m.utils.openai>
-
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Usage Examples
-
-   examples
