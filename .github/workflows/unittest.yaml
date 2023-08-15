@@ -1,0 +1,33 @@
+name: Unit test
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  unittest:
+    strategy:
+      matrix:
+        os: ['ubuntu-latest', 'windows-latest', 'macos-latest']
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+    runs-on: ${{ matrix.os }}
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest pytest-mock
+
+      - name: Run the test suite
+        run: |
+          pytest ml3m --full-trace

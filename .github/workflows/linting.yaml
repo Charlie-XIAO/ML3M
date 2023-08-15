@@ -1,11 +1,11 @@
-name: Code check
+name: Linting
 
 on:
   push:
     branches: [master]
 
 jobs:
-  code-check:
+  linting:
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11']
@@ -24,8 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install -r requirements.txt
-          python -m pip install pre-commit mypy types-tqdm pandas-stubs pytest pytest-mock
+          python -m pip install pre-commit mypy types-tqdm pandas-stubs
           pre-commit install
 
       - name: Run pre-commit
@@ -36,7 +35,3 @@ jobs:
           else
             pre-commit run --all-files --verbose
           fi
-
-      - name: Run unit tests
-        run: |
-          pytest ml3m
