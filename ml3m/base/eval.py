@@ -12,7 +12,7 @@ import openai
 import pandas as pd
 
 from .._async import AsyncRunner
-from .._display import COLOR, colored
+from .._display import COLOR, colored, format_data_item
 from .._logging import manage_timed_logs
 from .._paths import ensure_path, validate_path
 from ..errors import InvalidParameterError, ScoringError
@@ -378,7 +378,7 @@ class BaseEvaluator:
                 scores = self._get_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
                 norm_msg = [
-                    (f"{prefix} [Item]", item),
+                    (f"{prefix} [Item]", format_data_item(data_item)),
                     (f"{prefix} [Scores]", eval_scores),
                 ]
             except Exception as e:
@@ -426,7 +426,7 @@ class BaseEvaluator:
                 scores = await self._aget_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
                 norm_msg = [
-                    (f"{prefix} [Item]", item),
+                    (f"{prefix} [Item]", format_data_item(data_item)),
                     (f"{prefix} [Scores]", eval_scores),
                 ]
             except Exception as e:

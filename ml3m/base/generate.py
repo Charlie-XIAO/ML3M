@@ -258,7 +258,7 @@ class ResponseGenerator:
                 formatted_query = self.info_func(data_item)
                 response = self.query_func(formatted_query)
                 norm_msg = [
-                    (f"[{i}] [Item]", item),
+                    (f"[{i}] [Query]", formatted_query),
                     (f"[{i}] [Response]", response),
                 ]
             except Exception as e:
@@ -306,7 +306,7 @@ class ResponseGenerator:
                 formatted_query = self.info_func(data_item)
                 response = await self.query_func(formatted_query)  # type: ignore[misc]
                 norm_msg = [
-                    (f"[{i}] [Item]", item),
+                    (f"[{i}] [Query]", formatted_query),
                     (f"[{i}] [Response]", response),
                 ]
             except Exception as e:

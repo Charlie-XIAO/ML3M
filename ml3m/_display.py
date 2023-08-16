@@ -4,7 +4,12 @@ import shutil
 import sys
 import textwrap
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+import pandas as pd
+
+if TYPE_CHECKING:
+    from ._typing import DataItemType
 
 #######################################################################################
 #                                                                                     #
@@ -137,3 +142,34 @@ def wrap_with_prefix(
         content_ln = "" if i >= content_nlns else colored(content_lns[i], content_color)
         lns.append(f"{prefix_ln}   {content_ln}")
     return "\n".join(lns)
+
+
+#######################################################################################
+#                                                                                     #
+#                                  OTHER FORMATTING                                   #
+#                                                                                     #
+#######################################################################################
+
+
+def format_data_item(data_item: DataItemType) -> str:
+    """Format a data item into a nice printout.
+
+    Parameters
+    ----------
+    data_item : DataItemType
+        The data item to format.
+
+    Returns
+    -------
+    formatted_data_item : str
+        The formatted data item.
+    """
+    concatenator = " " + EMOJI.DIAMOND * 3 + " "
+    if isinstance(data_item, list):
+        return concatenator.join(data_item)
+    elif isinstance(data_item, (dict, pd.Series)):
+        return concatenator.join(
+            [f"{colored(k, COLOR.CYAN)}: {v}" for k, v in data_item.items()]
+        )
+    else:
+        raise TypeError(f"Invalid data item of type {type(data_item)}.")
