@@ -158,7 +158,7 @@ class AsyncRunner:
                     )
                     for norm_prefix, norm_content in norm_msg
                 ]
-                tqdm.write("\n\n".join(to_console) + "\n")
+                tqdm.write("\n".join(to_console) + "\n")
             self.progbar.update(1)
 
             # Collect the result
@@ -239,26 +239,27 @@ class AsyncRunner:
             # Print to console according to verbosity level
             async with self.proglk:
                 if result is None and err_msg is not None and self.verbose >= 0:
-                    tqdm.write(
-                        wrap_with_prefix(
-                            f"{err_msg[0]} :: W{worker_id}",
-                            err_msg[1],
-                            max_lines=self.verbose,
-                            prefix_color=COLOR.RED,
-                            content_color=COLOR.RED,
-                        )
+                    to_console = wrap_with_prefix(
+                        err_msg[0],
+                        err_msg[1],
+                        max_lines=self.verbose,
+                        prefix_color=COLOR.RED,
+                        content_color=COLOR.RED,
                     )
+                    if self.verbose >= 1:
+                        to_console += "\n"
+                    tqdm.write(to_console)
                 elif result is not None and norm_msg is not None and self.verbose >= 1:
-                    to_console = [
+                    to_console_list = [
                         wrap_with_prefix(
-                            f"{norm_prefix} :: W{worker_id}",
+                            norm_prefix,
                             norm_content,
                             max_lines=self.verbose,
                             prefix_color=COLOR.GREEN,
                         )
                         for norm_prefix, norm_content in norm_msg
                     ]
-                    tqdm.write("\n\n".join(to_console) + "\n")
+                    tqdm.write("\n".join(to_console_list) + "\n")
                 self.progbar.update(1)
 
             # Collect the result and mark the task as done

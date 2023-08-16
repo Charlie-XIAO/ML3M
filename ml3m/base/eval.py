@@ -367,7 +367,7 @@ class BaseEvaluator:
         ):
             """The sequential processing function."""
             i, it, data_item = item
-            prefix = f"[{i}]" if self.n_iter == 1 else f"[{i}/{it}]"
+            prefix = f"{i}" if self.n_iter == 1 else f"{i}.{it}"
             eval_scores: dict[Any, Real] | None = None
             norm_msg: list[tuple[Any, Any]] | None = None
             err: Exception | None = None
@@ -378,8 +378,8 @@ class BaseEvaluator:
                 scores = self._get_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
                 norm_msg = [
-                    (f"{prefix} [Item]", format_data_item(data_item)),
-                    (f"{prefix} [Scores]", eval_scores),
+                    (f"[{prefix}/ IT]", format_data_item(data_item)),
+                    (f"[{prefix}/ SC]", eval_scores),
                 ]
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
@@ -415,7 +415,7 @@ class BaseEvaluator:
         ] | tuple[None, None, tuple[Any, Any]]:
             """The asynchronous processing function."""
             i, it, data_item = item
-            prefix = f"[{i}]" if self.n_iter == 1 else f"[{i}/{it}]"
+            prefix = f"{i}" if self.n_iter == 1 else f"{i}.{it}"
             eval_scores: dict[Any, Real] | None = None
             norm_msg: list[tuple[Any, Any]] | None = None
             err: Exception | None = None
@@ -426,8 +426,8 @@ class BaseEvaluator:
                 scores = await self._aget_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
                 norm_msg = [
-                    (f"{prefix} [Item]", format_data_item(data_item)),
-                    (f"{prefix} [Scores]", eval_scores),
+                    (f"[{prefix}/ IT]", format_data_item(data_item)),
+                    (f"[{prefix}/ SC]", eval_scores),
                 ]
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
