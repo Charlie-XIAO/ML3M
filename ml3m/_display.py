@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import shutil
 import sys
-import textwrap
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -83,6 +82,70 @@ class EMOJI:
 #######################################################################################
 
 
+def wrap_text(text: str, width: int, max_lines: int | None = None) -> list[str]:
+    """Text wrapper similar to textwrap.wrap.
+
+    This considers Chinese characters as two-characters-wide, because commonly this is
+    used for printing to console and consoles commonly use monospace fonts where 2:1
+    is a close approximation. Note that there might be a slight overflow in the actual
+    display due to the approximation. One would need to relax ``width`` if a strict
+    guarantee is desired.
+
+    Parameters
+    ----------
+    text : str
+        The text for which its representation will be wrapped.
+    width : int
+        The maximum width of the wrapped text. Must be at least 7.
+    max_lines : int, optional
+        The maximum number of lines to display. If ``None``, there is no limit. If the
+        text is too long to display within ``max_lines``, it will be marked with a
+        placeholder "[...]".
+
+    Returns
+    -------
+    wrapped : list of str
+        The list of the wrapped lines of the text.
+    """
+    contents = list(repr(text)[-2:0:-1])
+    if max_lines is not None:
+        max_lines = max(1, max_lines)
+    remaining_lines = max_lines
+    wrapped: list[str] = []
+
+    # Cannot accept width < 7 due to the placeholder
+    if width < 7:
+        raise ValueError("Require 'width' at least 7.")
+
+    while contents:
+        # Break early if no remaining lines are left and plug in placeholder
+        if remaining_lines == 0:
+            lastln, n_replace, cum_length = wrapped[-1], 0, 0
+            while cum_length < 6:
+                n_replace += 1
+                cum_length += 2 if 0x4E00 <= ord(lastln[-n_replace]) <= 0x9FFF else 1
+            wrapped[-1] = f"{lastln[:-n_replace]} [...]"
+            break
+
+        # Create a new line and loop until the next character cannot fit in
+        line, line_length = [], 0
+        while contents:
+            char = contents[-1]
+            char_length = 2 if 0x4E00 <= ord(char) <= 0x9FFF else 1
+            if line_length + char_length > width:
+                break
+            line.append(char)
+            line_length += char_length
+            contents.pop()
+        wrapped.append("".join(line))
+
+        # Reduce the number of remaining lines if there is a restriction
+        if remaining_lines is not None:
+            remaining_lines -= 1
+
+    return wrapped
+
+
 def wrap_with_prefix(
     prefix: Any,
     content: Any,
@@ -113,7 +176,7 @@ def wrap_with_prefix(
     wrapped : str
         The wrapped (and colored) prefix and content.
     """
-    prefix_width = shutil.get_terminal_size().columns // 4 - 1
+    prefix_width = shutil.get_terminal_size().columns // 4 - 2  # Avoid overflow
     content_width = prefix_width * 3
 
     # Possibly adjust the proportion
@@ -123,12 +186,12 @@ def wrap_with_prefix(
         content_width += difference
 
     # Make sure the maximum widths are enough for the placeholder
-    prefix_width = max(5, prefix_width)
-    content_width = max(5, content_width)
+    prefix_width = max(7, prefix_width)
+    content_width = max(7, content_width)
 
     # Wrap the prefix and the content respectively
-    prefix_lns = textwrap.wrap(f"{prefix}", width=prefix_width, max_lines=max_lines)
-    content_lns = textwrap.wrap(f"{content}", width=content_width, max_lines=max_lines)
+    prefix_lns = wrap_text(f"{prefix}", width=prefix_width, max_lines=max_lines)
+    content_lns = wrap_text(f"{content}", width=content_width, max_lines=max_lines)
     prefix_nlns, content_nlns = len(prefix_lns), len(content_lns)
 
     # Combine the prefix and the content lines
@@ -140,7 +203,7 @@ def wrap_with_prefix(
             else colored(f"{prefix_lns[i]:<{prefix_width}}", prefix_color)
         )
         content_ln = "" if i >= content_nlns else colored(content_lns[i], content_color)
-        lns.append(f"{prefix_ln}   {content_ln}")
+        lns.append(f"{prefix_ln}  {content_ln}")
     return "\n".join(lns)
 
 
