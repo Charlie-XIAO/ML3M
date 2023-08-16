@@ -1,3 +1,5 @@
+.. _generators:
+
 Generating Model Responses
 ==========================
 
@@ -21,8 +23,8 @@ original evaluation dataset. The relevant class is:
     base.ResponseGenerator
 
 To use :class:`ml3m.base.ResponseGenerator`, you would need to prepare an original
-evaluation dataset ``orig_dataset`` and a saving location ``dataset`` to for storing
-the original data *and* the responses. The reason for not updating ``orig_dataset`` in
+evaluation dataset ``orig_dataset`` and a saving location ``dataset`` for storing the
+original data *and* the responses. The reason for not updating ``orig_dataset`` in
 place is to keep the original evaluation dataset clean for other possible use. There
 are currently three supported formats, as will be introduced next.
 

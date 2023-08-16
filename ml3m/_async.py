@@ -9,8 +9,7 @@ from typing import Any, Callable, Iterable, NoReturn
 
 from tqdm import tqdm
 
-from ._color import COLOR, colored
-from ._emoji import EMOJI
+from ._display import COLOR, EMOJI, colored, wrap_with_prefix
 from .errors import InvalidParameterError
 
 
@@ -23,7 +22,8 @@ class AsyncRunner:
         The processing function that takes a data item then returns three things: the
         result, a normal message, and an error message. If the processing succeeds, the
         error message should be ``None``. If the processing errors out, the result and
-        the normal message should be ``None``.
+        the normal message should be ``None``. The normal message should be a list of
+        prefix-content pairs. The error message should be a prefix-content pair.
 
         .. note::
             This function must be provided if the runner is intended to be run with a
@@ -47,17 +47,18 @@ class AsyncRunner:
             argument ``addtlks`` of type ``list[asyncio.Lock] | None`` with default
             value ``None``. It should also handle all possible exceptions, for the same
             reason as described in ``process_func``.
-    verbose : int, default=1
-        The verbosity level of the processing. For level 0, only a progress bar will be
-        displayed. For level 1, the errored items will also be displayed. For level 2
-        higher than 2, all items will be displayed.
+    verbose : int, default=0
+        The verbosity level of the processing. For negative levels, only a progress bar
+        will be displayed. For level 0, the errored items will also be displayed. For
+        positive levels, the all items will be displayed, and the verbosity level
+        determines the number of lines to display for the message of each item.
     """
 
     def __init__(
         self,
         process_func: Callable | None = None,
         process_afunc: Callable | None = None,
-        verbose: int = 1,
+        verbose: int = 0,
     ):
         self.process_func = process_func
         self.process_afunc = process_afunc
@@ -112,45 +113,58 @@ class AsyncRunner:
 
         # Process each item sequentially
         for item in all_items:
-            processed: Any | None = None
-            unexpected_exception: str | None = None
+            result: Any | None
+            norm_msg: list[tuple[Any, Any]] | None
+            err_msg: tuple[Any, Any] | None
 
             # Avoid explicitly raising the exception that interrupts the runner
             try:
                 # Validated self.process_func is not None before calling
-                processed = self.process_func(  # type: ignore[misc]
+                result, norm_msg, err_msg = self.process_func(  # type: ignore[misc]
                     item, **self.worker_kwargs[0]
                 )
+                assert (
+                    norm_msg is None
+                    or isinstance(norm_msg, list)
+                    and all(
+                        isinstance(item, tuple) and len(item) == 2 for item in norm_msg
+                    )
+                ), "invalid norm_msg type"
+                assert (
+                    err_msg is None or isinstance(err_msg, tuple) and len(err_msg) == 2
+                ), "invalid err_msg type"
             except Exception as e:
-                unexpected_exception = f"UNEXPECTED {type(e).__name__}: {e!s:.30s}"
-            if processed is not None:
-                if not isinstance(processed, tuple):
-                    unexpected_exception = (
-                        "UNEXPECTED: 'process_func' returns a single value"
-                    )
-                elif len(processed) != 3:
-                    unexpected_exception = (
-                        f"UNEXPECTED: 'process_func' returns {len(processed)} values; "
-                        "expected 3"
-                    )
+                result, norm_msg = None, None
+                err_msg = ("UNEXPECTED", f"{type(e).__name__}: {e}")
 
-            # Get the processed information or treat the item as failed
-            if unexpected_exception is not None:
-                tqdm.write(colored(unexpected_exception, COLOR.RED))
-                self.shared_resources.append((False, item))
-                self.progbar.update(1)
-                continue
-            result, norm_msg, err_msg = processed
+            # Print to console according to verbosity level
+            if result is None and err_msg is not None and self.verbose >= 0:
+                tqdm.write(
+                    wrap_with_prefix(
+                        err_msg[0],
+                        err_msg[1],
+                        max_lines=self.verbose,
+                        prefix_color=COLOR.RED,
+                        content_color=COLOR.RED,
+                    )
+                )
+            elif result is not None and norm_msg is not None and self.verbose >= 1:
+                to_console = [
+                    wrap_with_prefix(
+                        norm_prefix,
+                        norm_content,
+                        max_lines=self.verbose,
+                        prefix_color=COLOR.GREEN,
+                    )
+                    for norm_prefix, norm_content in norm_msg
+                ]
+                tqdm.write("\n\n".join(to_console) + "\n")
+            self.progbar.update(1)
 
-            # Print the execution information by demand
-            if result is not None and self.verbose >= 2:
-                tqdm.write(norm_msg)
-            elif result is None and self.verbose >= 1:
-                tqdm.write(colored(err_msg, COLOR.RED))
+            # Collect the result
             self.shared_resources.append(
                 (True, result) if result is not None else (False, item)
             )
-            self.progbar.update(1)
         self.progbar.close()
 
     async def _mainloop(self) -> None:
@@ -194,48 +208,57 @@ class AsyncRunner:
         """
         while True:
             item = await self.queue.get()
-            prefix = f"[W{worker_id:03d}]"
-            processed: Any | None = None
-            unexpected_exception: str | None = None
+            result: Any | None
+            norm_msg: list[tuple[Any, Any]] | None
+            err_msg: tuple[Any, Any] | None
 
             # Avoid "task exception never being retrieved"
             try:
                 # Validated self.process_afunc is not None before calling
-                processed = await self.process_afunc(  # type: ignore[misc]
+                (
+                    result,
+                    norm_msg,
+                    err_msg,
+                ) = await self.process_afunc(  # type: ignore[misc]
                     item, addtlks=self.addtlks, **kwargs
                 )
+                assert (
+                    norm_msg is None
+                    or isinstance(norm_msg, list)
+                    and all(
+                        isinstance(item, tuple) and len(item) == 2 for item in norm_msg
+                    )
+                ), "invalid norm_msg type"
+                assert (
+                    err_msg is None or isinstance(err_msg, tuple) and len(err_msg) == 2
+                ), "invalid err_msg type"
             except Exception as e:
-                unexpected_exception = f"UNEXPECTED {type(e).__name__}: {e!s:.30s}"
-            if processed is not None:
-                if not isinstance(processed, tuple):
-                    unexpected_exception = (
-                        "UNEXPECTED: 'process_afunc' returns a single value"
-                    )
-                elif len(processed) != 3:
-                    unexpected_exception = (
-                        f"UNEXPECTED: 'process_afunc' returns {len(processed)} values; "
-                        "expected 3"
-                    )
+                result, norm_msg = None, None
+                err_msg = ("UNEXPECTED", f"{type(e).__name__}: {e}")
 
-            # Get the processed information or treat the item as failed
-            if unexpected_exception is not None:
-                async with self.proglk:
-                    tqdm.write(
-                        f"{prefix:<10} {colored(unexpected_exception, COLOR.RED)}"
-                    )
-                    self.progbar.update(1)
-                async with self.mainlk:
-                    self.shared_resources.append((False, item))
-                self.queue.task_done()
-                continue
-            result, norm_msg, err_msg = processed
-
-            # Print the execution information by demand
+            # Print to console according to verbosity level
             async with self.proglk:
-                if result is not None and self.verbose >= 2:
-                    tqdm.write(f"{prefix:<10} {norm_msg}")
-                elif result is None and self.verbose >= 1:
-                    tqdm.write(f"{prefix:<10} {colored(err_msg, COLOR.RED)}")
+                if result is None and err_msg is not None and self.verbose >= 0:
+                    tqdm.write(
+                        wrap_with_prefix(
+                            f"{err_msg[0]} :: W{worker_id}",
+                            err_msg[1],
+                            max_lines=self.verbose,
+                            prefix_color=COLOR.RED,
+                            content_color=COLOR.RED,
+                        )
+                    )
+                elif result is not None and norm_msg is not None and self.verbose >= 1:
+                    to_console = [
+                        wrap_with_prefix(
+                            f"{norm_prefix} :: W{worker_id}",
+                            norm_content,
+                            max_lines=self.verbose,
+                            prefix_color=COLOR.GREEN,
+                        )
+                        for norm_prefix, norm_content in norm_msg
+                    ]
+                    tqdm.write("\n\n".join(to_console) + "\n")
                 self.progbar.update(1)
 
             # Collect the result and mark the task as done

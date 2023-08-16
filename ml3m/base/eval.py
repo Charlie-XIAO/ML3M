@@ -12,7 +12,7 @@ import openai
 import pandas as pd
 
 from .._async import AsyncRunner
-from .._color import COLOR, colored
+from .._display import COLOR, colored
 from .._logging import manage_timed_logs
 from .._paths import ensure_path, validate_path
 from ..errors import InvalidParameterError, ScoringError
@@ -71,10 +71,11 @@ class BaseEvaluator:
     logging_mode : {"all", "failed", "none"}, default="all"
         The logging mode, whether to save the logs of all items, or only of failed
         items, or save no log.
-    verbose : int, default=1
-        The verbosity level of the processing. For level 0, only a progress bar will be
-        displayed. For level 1, the errored items will also be displayed. For levels
-        higher than 2, all items will be displayed.
+    verbose : int, default=0
+        The verbosity level of the processing. For negative levels, only a progress bar
+        will be displayed. For level 0, the errored items will also be displayed. For
+        positive levels, the all items will be displayed, and the verbosity level
+        determines the number of lines to display for the message of each item.
     """
 
     def __init__(
@@ -88,7 +89,7 @@ class BaseEvaluator:
         n_iter: int = 1,
         agg_method: AggregateMethod | None = None,
         logging_mode: LoggingMode = "all",
-        verbose: int = 1,
+        verbose: int = 0,
     ) -> None:
         self.dataset = dataset
         self.save_path = save_path
@@ -361,13 +362,14 @@ class BaseEvaluator:
         def process_func(
             item: tuple[int, int, DataItemType], **kwargs
         ) -> (
-            tuple[tuple[int, int, dict[Any, Real]], str, None] | tuple[None, None, str]
+            tuple[tuple[int, int, dict[Any, Real]], list[tuple[Any, Any]], None]
+            | tuple[None, None, tuple[Any, Any]]
         ):
             """The sequential processing function."""
             i, it, data_item = item
-            prefix = f"Item.{i}" if self.n_iter == 1 else f"Item/Iter.{i}/{it}"
+            prefix = f"[{i}]" if self.n_iter == 1 else f"[{i}/{it}]"
             eval_scores: dict[Any, Real] | None = None
-            norm_msg: str | None = None
+            norm_msg: list[tuple[Any, Any]] | None = None
             err: Exception | None = None
             err_trace: str | None = None
 
@@ -375,13 +377,10 @@ class BaseEvaluator:
             try:
                 scores = self._get_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
-                norm_msg = prefix
-                if self.verbose >= 3:
-                    norm_msg += f"\n{colored('Item:', COLOR.GREEN)}\n{item}"
-                norm_msg += (
-                    f"\n{colored('Scores:', COLOR.GREEN)}\n"
-                    f"{json.dumps(eval_scores, ensure_ascii=False)}"
-                )
+                norm_msg = [
+                    (f"{prefix} [Item]", item),
+                    (f"{prefix} [Scores]", eval_scores),
+                ]
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
@@ -396,7 +395,7 @@ class BaseEvaluator:
                     "index": i,
                     "iter": it,
                     "eval_scores": eval_scores,
-                    "norm_msg": norm_msg,
+                    "norm_msg": str(norm_msg),
                     "err_msg": err_trace,
                 }
                 with open(mlog_path, "a", encoding="utf-8") as f:
@@ -405,20 +404,20 @@ class BaseEvaluator:
             # Return the information based on success or failure
             if eval_scores is not None and norm_msg is not None:
                 return (i, it, eval_scores), norm_msg, None
-            return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
+            return None, None, (prefix, f"{type(err).__name__}: {err}")
 
         async def process_afunc(
             item: tuple[int, int, DataItemType],
             addtlks: list[asyncio.Lock] | None = None,
             **kwargs,
-        ) -> tuple[tuple[int, int, dict[Any, Real]], str, None] | tuple[
-            None, None, str
-        ]:
+        ) -> tuple[
+            tuple[int, int, dict[Any, Real]], list[tuple[Any, Any]], None
+        ] | tuple[None, None, tuple[Any, Any]]:
             """The asynchronous processing function."""
             i, it, data_item = item
-            prefix = f"Item.{i}" if self.n_iter == 1 else f"Item/Iter.{i}/{it}"
+            prefix = f"[{i}]" if self.n_iter == 1 else f"[{i}/{it}]"
             eval_scores: dict[Any, Real] | None = None
-            norm_msg: str | None = None
+            norm_msg: list[tuple[Any, Any]] | None = None
             err: Exception | None = None
             err_trace: str | None = None
 
@@ -426,13 +425,10 @@ class BaseEvaluator:
             try:
                 scores = await self._aget_score(data_item, **kwargs)
                 eval_scores = self._check_scores(scores)
-                norm_msg = prefix
-                if self.verbose >= 3:
-                    norm_msg += f"\n{colored('Item:', COLOR.GREEN)}\n{item}"
-                norm_msg += (
-                    f"\n{colored('Scores:', COLOR.GREEN)}\n"
-                    f"{json.dumps(eval_scores, ensure_ascii=False)}"
-                )
+                norm_msg = [
+                    (f"{prefix} [Item]", item),
+                    (f"{prefix} [Scores]", eval_scores),
+                ]
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
@@ -447,7 +443,7 @@ class BaseEvaluator:
                     "index": i,
                     "iter": it,
                     "eval_scores": eval_scores,
-                    "norm_msg": norm_msg,
+                    "norm_msg": str(norm_msg),
                     "err_msg": err_trace,
                 }
                 assert isinstance(addtlks, list)
@@ -458,7 +454,7 @@ class BaseEvaluator:
             # Return the information based on success or failure
             if eval_scores is not None and norm_msg is not None:
                 return (i, it, eval_scores), norm_msg, None
-            return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
+            return None, None, (prefix, f"{type(err).__name__}: {err}")
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(
@@ -684,10 +680,11 @@ class BaseOpenAIEvaluator(BaseEvaluator):
     logging_mode : {"all", "failed", "none"}, default="all"
         The logging mode, whether to save the logs of all items, or only of failed
         items, or save no log.
-    verbose : int, default=1
-        The verbosity level of the processing. For level 0, only a progress bar will be
-        displayed. For level 1, the errored items will also be displayed. For levels
-        higher than 2, all items will be displayed.
+    verbose : int, default=0
+        The verbosity level of the processing. For negative levels, only a progress bar
+        will be displayed. For level 0, the errored items will also be displayed. For
+        positive levels, the all items will be displayed, and the verbosity level
+        determines the number of lines to display for the message of each item.
     openai_kwargs
         The additional keyword arguments to pass to OpenAI ChatCompletion. See the
         arguments marked as *Optional* at
@@ -709,7 +706,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         timeout: float = 60,
         model: str = "gpt-3.5-turbo",
         logging_mode: LoggingMode = "all",
-        verbose: int = 1,
+        verbose: int = 0,
         **openai_kwargs,
     ) -> None:
         self.openai_config = openai_config

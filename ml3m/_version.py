@@ -4,7 +4,7 @@ import platform
 import sys
 from importlib.metadata import PackageNotFoundError, version
 
-from ._color import COLOR, colored
+from ._display import COLOR, colored
 
 
 def show_versions():

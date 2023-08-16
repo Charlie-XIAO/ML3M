@@ -81,7 +81,7 @@ def prepare(request, storage):
 #######################################################################################
 
 
-def query_func_fixed(data_item, response="", mode="normal"):
+def query_func_fixed(query, response="", mode="normal"):
     """Return a fixed response.
 
     This can normally pass all items, fail all items, fail a certain item based on the
@@ -89,22 +89,17 @@ def query_func_fixed(data_item, response="", mode="normal"):
     item is a list).
     """
     if mode == "normal" or mode.startswith("err_on_"):
-        if (
-            mode.startswith("err_on_instruction_")
-            and data_item["instruction"] == mode[19:]
-        ):
+        if mode.startswith("err_on_instruction_") and query["instruction"] == mode[19:]:
             raise ValueError
         mat = re.match(r"err_on_index\.(\d+)_(.+)", mode, re.DOTALL)
         if mat is not None:
-            if isinstance(data_item, list) and data_item[
-                int(mat.group(1))
-            ] == mat.group(2):
+            if isinstance(query, list) and query[int(mat.group(1))] == mat.group(2):
                 raise ValueError
             if (
-                isinstance(data_item, dict)
-                and "data" in data_item
-                and isinstance(data_item["data"], list)
-                and data_item["data"][int(mat.group(1))] == mat.group(2)
+                isinstance(query, dict)
+                and "data" in query
+                and isinstance(query["data"], list)
+                and query["data"][int(mat.group(1))] == mat.group(2)
             ):
                 raise ValueError
         return response
@@ -112,7 +107,7 @@ def query_func_fixed(data_item, response="", mode="normal"):
         raise ValueError
 
 
-async def query_afunc_fixed(data_item, response, mode="normal"):
+async def query_afunc_fixed(query, response, mode="normal"):
     """Return a fixed response.
 
     This can normally pass all items, fail all items, fail a certain item based on the
@@ -120,7 +115,7 @@ async def query_afunc_fixed(data_item, response, mode="normal"):
     item is a list).
     """
     await asyncio.sleep(0.01)
-    return query_func_fixed(data_item, response, mode=mode)
+    return query_func_fixed(query, response, mode=mode)
 
 
 #######################################################################################
@@ -143,7 +138,7 @@ class TestResponseGenerator:
     )
     @pytest.mark.parametrize("response_name", ["response", "model_response"])
     @pytest.mark.parametrize("logging_mode", ["none", "all", "failed"])
-    @pytest.mark.parametrize("verbose", [0, 1, 2, 3])
+    @pytest.mark.parametrize("verbose", [-1, 0, 1, 2])
     def test_response_generator_result_versus_written(
         self,
         query_func,
@@ -167,6 +162,7 @@ class TestResponseGenerator:
         generator = ResponseGenerator(
             orig_dataset=orig_dataset,
             dataset=dataset,
+            info_func=lambda x: x,
             query_func=query_func,
             response_name=response_name,
             fmt=fmt,
@@ -201,7 +197,7 @@ class TestResponseGenerator:
     )
     @pytest.mark.parametrize("response_name", ["response", "model_response"])
     @pytest.mark.parametrize("logging_mode", ["none", "all", "failed"])
-    @pytest.mark.parametrize("verbose", [0, 1, 2, 3])
+    @pytest.mark.parametrize("verbose", [-1, 0, 1, 2])
     def test_response_generator_result_versus_written_list(
         self,
         query_func,
@@ -227,6 +223,7 @@ class TestResponseGenerator:
         generator = ResponseGenerator(
             orig_dataset=orig_dataset,
             dataset=dataset,
+            info_func=lambda x: x,
             query_func=query_func,
             response_name=response_name,
             fmt=fmt,
@@ -275,6 +272,7 @@ class TestResponseGenerator:
             return ResponseGenerator(
                 orig_dataset=orig_dataset,
                 dataset=dataset,
+                info_func=lambda x: x,
                 query_func=partial(query_func, mode=mode),
                 response_name=response_name,
                 fmt=fmt,
@@ -434,6 +432,7 @@ class TestResponseGenerator:
             return ResponseGenerator(
                 orig_dataset=orig_dataset,
                 dataset=dataset,
+                info_func=lambda x: x,
                 query_func=partial(query_func, mode=mode),
                 response_name=response_name,
                 fmt=fmt,
@@ -553,6 +552,7 @@ class TestResponseGenerator:
             return ResponseGenerator(
                 orig_dataset=orig_dataset,
                 dataset=dataset,
+                info_func=lambda x: x,
                 query_func=partial(query_func, response=response, mode=mode),
                 response_name=response_name,
                 fmt=fmt,
@@ -667,6 +667,7 @@ class TestResponseGenerator:
             return ResponseGenerator(
                 orig_dataset=orig_dataset,
                 dataset=dataset,
+                info_func=lambda x: x,
                 query_func=partial(query_func, response=response, mode=mode),
                 response_name=response_name,
                 fmt=fmt,
@@ -744,9 +745,21 @@ class TestResponseGenerator:
                 ResponseGenerator(
                     orig_dataset=orig_dataset,
                     dataset=dataset,
+                    info_func=lambda x: x,
                     query_func=query_func_fixed,
                     response_name="response",
                     n_workers=n_workers,
+                )
+
+        # Test invalid info_func
+        for info_func in [None, "func"]:
+            with pytest.raises(InvalidParameterError):
+                ResponseGenerator(
+                    orig_dataset=orig_dataset,
+                    dataset=dataset,
+                    info_func=info_func,
+                    query_func=query_func_fixed,
+                    response_name="response",
                 )
 
         # Test invalid query_func
@@ -755,6 +768,7 @@ class TestResponseGenerator:
                 ResponseGenerator(
                     orig_dataset=orig_dataset,
                     dataset=dataset,
+                    info_func=lambda x: x,
                     query_func=query_func,
                     response_name="response",
                 )
@@ -768,6 +782,7 @@ class TestResponseGenerator:
                 ResponseGenerator(
                     orig_dataset=orig_dataset,
                     dataset=dataset,
+                    info_func=lambda x: x,
                     query_func=query_func,
                     response_name="response",
                     n_workers=n_workers,
@@ -779,6 +794,7 @@ class TestResponseGenerator:
                 ResponseGenerator(
                     orig_dataset=orig_dataset,
                     dataset=dataset,
+                    info_func=lambda x: x,
                     query_func=query_func_fixed,
                     response_name="response",
                     fmt=fmt,
@@ -790,6 +806,7 @@ class TestResponseGenerator:
                 ResponseGenerator(
                     orig_dataset=orig_dataset,
                     dataset=dataset,
+                    info_func=lambda x: x,
                     query_func=query_func_fixed,
                     response_name="response",
                     logging_mode=logging_mode,

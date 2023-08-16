@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generator
 import pandas as pd
 
 from .._async import AsyncRunner
-from .._color import COLOR, colored
+from .._display import COLOR, colored
 from .._logging import manage_timed_logs
 from .._paths import ensure_path, validate_path
 from ..errors import InvalidParameterError
@@ -32,12 +32,15 @@ class ResponseGenerator:
     dataset : str or pathlib.Path
         The absolute path to the result dataset. All information in the original
         dataset will be preserved while the responses will be appended.
+    info_func : Callable
+        The function that takes a data item and forms the query. The data item can be a
+        :class:`pandas.Series`, a list, or a dictionary, depending on ``format``.
+        Whatever it returns will be passed as the input to ``query_func`` and printed
+        to console for high verbosity levels.
     query_func : Callable
-        The function that queries a model given a data item and outputs the model
-        response. The input parameter should be a :class:`pandas.Series`, a list, or a
-        dictionary, depending on ``format``. The output should be a single string
-        representing the model response. This function should be synchronous if
-        ``n_workers=1`` and asynchronous otherwise.
+        The function that takes the query returned by ``info_func`` and outputs the
+        model response represented as a single string. This function should be
+        synchronous if ``n_workers=1`` and asynchronous otherwise.
     response_name : str
         The key or column name to use for the response. This should *not* be a key or
         column name that already exists in the dataset. Be extremely careful since
@@ -51,26 +54,29 @@ class ResponseGenerator:
     logging_mode : {"all", "failed", "none"}, default="all"
         The logging mode, whether to save the logs of all items, or only of failed
         items, or save no log.
-    verbose : int, default=1
-        The verbosity level of the processing. For level 0, only a progress bar will be
-        displayed. For level 1, the errored items will also be displayed. For levels
-        higher than 2, all items will be displayed.
+    verbose : int, default=0
+        The verbosity level of the processing. For negative levels, only a progress bar
+        will be displayed. For level 0, the errored items will also be displayed. For
+        positive levels, the all items will be displayed, and the verbosity level
+        determines the number of lines to display for the message of each item.
     """
 
     def __init__(
         self,
         orig_dataset: str | Path,
         dataset: str | Path,
-        query_func: Callable[[DataItemType], str],
+        info_func: Callable[[DataItemType], Any],
+        query_func: Callable[[Any], str],
         response_name: str,
         *,
         fmt: DatasetFormat = "jsonl",
         n_workers: int = 1,
         logging_mode: LoggingMode = "all",
-        verbose: int = 1,
+        verbose: int = 0,
     ) -> None:
         self.orig_dataset = orig_dataset
         self.dataset = dataset
+        self.info_func = info_func
         self.query_func = query_func
         self.fmt = fmt
         self.response_name = response_name
@@ -85,6 +91,12 @@ class ResponseGenerator:
                 "n_workers",
                 actual=self.n_workers,
                 reason="must be an integer >= 1",
+            )
+        if not callable(self.info_func):
+            raise InvalidParameterError(
+                "info_func",
+                actual=self.info_func,
+                reason="must be a callable",
             )
         if not callable(self.query_func):
             raise InvalidParameterError(
@@ -226,12 +238,16 @@ class ResponseGenerator:
         """
         mlog_path = manage_timed_logs(prefix=type(self).__name__)
 
-        def process_func(item: tuple[int, DataItemType], **kwargs):
+        def process_func(
+            item: tuple[int, DataItemType], **kwargs
+        ) -> (
+            tuple[tuple[int, str], list[tuple[Any, Any]], None]
+            | tuple[None, None, tuple[Any, Any]]
+        ):
             """The sequential processing function."""
             i, data_item = item
-            prefix = f"Item.{i}"
             response: str | None = None
-            norm_msg: str | None = None
+            norm_msg: list[tuple[Any, Any]] | None = None
             err: Exception | None = None
             err_trace: str | None = None
 
@@ -239,11 +255,12 @@ class ResponseGenerator:
             try:
                 # `process_func` should be called only when using a single worker
                 # In that case, `self.query_func` is already validated synchrnous
-                response = self.query_func(data_item)
-                norm_msg = prefix
-                if self.verbose >= 3:
-                    norm_msg += f"\n{colored('Item:', COLOR.GREEN)}\n{item}"
-                norm_msg += f"\n{colored('Response:', COLOR.GREEN)}\n{response}"
+                formatted_query = self.info_func(data_item)
+                response = self.query_func(formatted_query)
+                norm_msg = [
+                    (f"[{i}] [Item]", item),
+                    (f"[{i}] [Response]", response),
+                ]
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
@@ -257,7 +274,7 @@ class ResponseGenerator:
                     "time": str(datetime.now()),
                     "index": i,
                     "response": response,
-                    "norm_msg": norm_msg,
+                    "norm_msg": str(norm_msg),
                     "err_msg": err_trace,
                 }
                 with open(mlog_path, "a", encoding="utf-8") as f:
@@ -266,18 +283,19 @@ class ResponseGenerator:
             # Return the information based on success or failure
             if response is not None and norm_msg is not None:
                 return (i, response), norm_msg, None
-            return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
+            return None, None, (f"[{i}]", f"{type(err).__name__}: {err}")
 
         async def process_afunc(
             item: tuple[int, DataItemType],
             addtlks: list[asyncio.Lock] | None = None,
             **kwargs,
-        ) -> tuple[tuple[int, str], str, None] | tuple[None, None, str]:
+        ) -> tuple[tuple[int, str], list[tuple[Any, Any]], None] | tuple[
+            None, None, tuple[Any, Any]
+        ]:
             """The asynchronous processing function."""
             i, data_item = item
-            prefix = f"Item.{i}"
             response: str | None = None
-            norm_msg: str | None = None
+            norm_msg: list[tuple[Any, Any]] | None = None
             err: Exception | None = None
             err_trace: str | None = None
 
@@ -285,11 +303,12 @@ class ResponseGenerator:
             try:
                 # `process_afunc` should be called only when using multiple workers
                 # In that case, `self.query_func` is already validated asynchronous
-                response = await self.query_func(data_item)  # type: ignore[misc]
-                norm_msg = prefix
-                if self.verbose >= 3:
-                    norm_msg += f"\n{colored('Item:', COLOR.GREEN)}\n{item}"
-                norm_msg += f"\n{colored('Response:', COLOR.GREEN)}\n{response}"
+                formatted_query = self.info_func(data_item)
+                response = await self.query_func(formatted_query)  # type: ignore[misc]
+                norm_msg = [
+                    (f"[{i}] [Item]", item),
+                    (f"[{i}] [Response]", response),
+                ]
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
@@ -303,7 +322,7 @@ class ResponseGenerator:
                     "time": str(datetime.now()),
                     "index": i,
                     "response": response,
-                    "norm_msg": norm_msg,
+                    "norm_msg": str(norm_msg),
                     "err_msg": err_trace,
                 }
                 assert isinstance(addtlks, list)
@@ -314,7 +333,7 @@ class ResponseGenerator:
             # Return the information based on success or failure
             if response is not None and norm_msg is not None:
                 return (i, response), norm_msg, None
-            return None, None, f"{prefix:<20} {type(err).__name__}: {err!s:.30s}"
+            return None, None, (f"[{i}]", f"{type(err).__name__}: {err}")
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(

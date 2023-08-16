@@ -24,7 +24,7 @@ def manage_timed_logs(prefix, keep: int = 3) -> str:
     mlog_path : str
         The absolute path to the new OpenAI log. Note that the log is not created yet.
     """
-    base = os.path.join(os.path.dirname(__file__), "..", "logs")
+    base = os.path.join(os.path.dirname(__file__), "logs")
     ensure_path(base, is_directory=True)
     dtformat = "%Y-%m-%d-%H.%M.%S.%f"
     fnames = [

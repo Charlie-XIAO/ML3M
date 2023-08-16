@@ -16,7 +16,7 @@ from ml3m.errors import InvalidParameterError
 
 def process_func(item, **kwargs):
     """Pass all items."""
-    return item * 10, f"Succeeded on {item}", None
+    return item * 10, [("Done", f"Succeeded on {item}")], None
 
 
 async def process_afunc(item, addtlks=None, **kwargs):
@@ -29,14 +29,12 @@ def failing_process_func(item, mode, **kwargs):
     """Fail items >= 5, supporting different modes of failing."""
     if item >= 5:
         if mode == "proper":
-            return None, None, f"Failed on {item}"
+            return None, None, ("Done", f"Failed on {item}")
         elif mode == "exception":
             raise ValueError
-        elif mode == "single_val":
-            return item * 10
-        elif mode == "not3_val":
+        elif mode == "cannot_unpack":
             return item * 10, None
-    return item * 10, f"Succeeded on {item}", None
+    return item * 10, [("Done", f"Succeeded on {item}")], None
 
 
 async def failing_process_afunc(item, mode, addtlks=None, **kwargs):
@@ -94,7 +92,7 @@ class TestAsyncRunner:
                 range(0, 50, 10),
                 range(5, 10),
             )
-            for mode in ["proper", "exception", "single_val", "not3_val"]
+            for mode in ["proper", "exception", "cannot_unpack"]
         ],
     )
     def test_async_runner_basics(self, func, afunc, passed, failed, worker_kwargs):

@@ -66,10 +66,11 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
     logging_mode : {"all", "failed", "none"}, default="all"
         The logging mode, whether to save the logs of all items, or only of failed
         items, or save no log.
-    verbose : int, default=1
-        The verbosity level of the processing. For level 0, only a progress bar will be
-        displayed. For level 1, the errored items will also be displayed. For levels
-        higher than 2, all items will be displayed.
+    verbose : int, default=0
+        The verbosity level of the processing. For negative levels, only a progress bar
+        will be displayed. For level 0, the errored items will also be displayed. For
+        positive levels, the all items will be displayed, and the verbosity level
+        determines the number of lines to display for the message of each item.
 
     Notes
     -----
@@ -113,7 +114,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         timeout: float = 60,
         model: str = "gpt-3.5-turbo",
         logging_mode: LoggingMode = "all",
-        verbose: int = 1,
+        verbose: int = 0,
     ) -> None:
         self.info_func = info_func
         self.setting = setting
@@ -242,10 +243,11 @@ class QaMetricEvaluator(BaseEvaluator):
     logging_mode : {"all", "failed", "none"}, default="all"
         The logging mode, whether to save the logs of all items, or only of failed
         items, or save no log.
-    verbose : int, default=1
-        The verbosity level of the processing. For level 0, only a progress bar will be
-        displayed. For level 1, the errored items will also be displayed. For levels
-        higher than 2, all items will be displayed.
+    verbose : int, default=0
+        The verbosity level of the processing. For negative levels, only a progress bar
+        will be displayed. For level 0, the errored items will also be displayed. For
+        positive levels, the all items will be displayed, and the verbosity level
+        determines the number of lines to display for the message of each item.
 
     Notes
     -----
@@ -281,7 +283,7 @@ class QaMetricEvaluator(BaseEvaluator):
         fmt: DatasetFormat = "jsonl",
         bleu_k: list[int] | None = None,
         logging_mode: LoggingMode = "all",
-        verbose: int = 1,
+        verbose: int = 0,
     ) -> None:
         self.info_func = info_func
         self.bleu_k = [1, 2, 3, 4] if bleu_k is None else bleu_k
