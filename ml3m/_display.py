@@ -85,11 +85,13 @@ class EMOJI:
 def wrap_text(text: str, width: int, max_lines: int | None = None) -> list[str]:
     """Text wrapper similar to textwrap.wrap.
 
-    This considers Chinese characters as two-characters-wide, because commonly this is
-    used for printing to console and consoles commonly use monospace fonts where 2:1
-    is a close approximation. Note that there might be a slight overflow in the actual
-    display due to the approximation. One would need to relax ``width`` if a strict
-    guarantee is desired.
+    This considers any characters with order >= 0x1100 as two-characters-wide, because
+    commonly this is used for printing to console and consoles commonly use monospace
+    fonts where 2:1 is a close approximation. (Note that 0x1100 is the first wide
+    character, though there are normal-width characters after that.)
+
+    There might be still a slight overflow in the actual display due to the
+    approximation. One would need to relax ``width`` if a strict guarantee is desired.
 
     Parameters
     ----------
@@ -123,7 +125,7 @@ def wrap_text(text: str, width: int, max_lines: int | None = None) -> list[str]:
             lastln, n_replace, cum_length = wrapped[-1], 0, 0
             while cum_length < 6:
                 n_replace += 1
-                cum_length += 2 if 0x4E00 <= ord(lastln[-n_replace]) <= 0x9FFF else 1
+                cum_length += 2 if ord(lastln[-n_replace]) >= 0x1100 else 1
             wrapped[-1] = f"{lastln[:-n_replace]} [...]"
             break
 
@@ -131,7 +133,7 @@ def wrap_text(text: str, width: int, max_lines: int | None = None) -> list[str]:
         line, line_length = [], 0
         while contents:
             char = contents[-1]
-            char_length = 2 if 0x4E00 <= ord(char) <= 0x9FFF else 1
+            char_length = 2 if ord(char) >= 0x1100 else 1
             if line_length + char_length > width:
                 break
             line.append(char)

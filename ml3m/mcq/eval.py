@@ -181,18 +181,20 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         _, actual, _ = self.info_func(data_item)
         return (
             "" if self.setting is None else self.setting,
-            "I will provide an example pair of input and output. Then I will give an "
-            "input, and please give the corresponding output following the format of "
-            "the example.\n\n### Input:\n\nAs follows is my answer to a multiple-"
-            "choice question with options A, B, C, and D:\n```\nA. “一个玻璃水杯,写明该"
-            "产品由透明材料制成”是错误的\nB. “一套茶具,写明套件 1 为茶壶,套件 2 为茶杯,"
-            "套件 3 为茶碟”是正确的\nC. “一款汽车,写明其为新能源动力驱动”是错误的\nD. "
-            "“一幅花布,写明其单元图案为四方连续无限定边界并请求保护色彩”是错误的\n```\n"
-            "Please tell which options my answer considers correct to the multiple-"
-            "choice question.\n\n### Output:\n\nAC\n\n### Input:\n\nAs follows is my "
-            f"answer to a multiple-choice question with options {self._labels_expr}:\n"
-            f"```\n{actual}\n```\nPlease tell which options my answer considers "
-            "correct to the multiple-choice question.\n\n### Output:",
+            "In this task, I will provide you an answer to a multiple-choice question "
+            "with options A, B, C, and D, but the question itself will not be given. "
+            "I want you to tell which options the answer selects as the solution to "
+            "the multiple-choice question. The criteria are as follows:\n- If the "
+            "answer explicitly mentions which are correct and which are wrong, it "
+            "selects the correct ones.\n- If the answer only mentions which are "
+            "wrong, it selects the rest.\n- If the answer only listed some options "
+            "without saying whether they are correct or wrong, it selects all options "
+            "it listed.\n- If the answer provides a paragraph of analysis, judge from "
+            "that analysis which options are selected.\nNote that when you respond, "
+            "you should only output the selected labels. For instance, if the answer "
+            "selects B and C, you should output 'BC'. Do not include any additional "
+            f"information.\n\nThe options are {self._labels_expr}. The answer is:\n```"
+            f"\n{actual}\n```\n\nThe selected option(s) is/are:",
         )
 
     def _extract_scores(

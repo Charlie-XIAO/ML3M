@@ -404,7 +404,7 @@ class BaseEvaluator:
             # Return the information based on success or failure
             if eval_scores is not None and norm_msg is not None:
                 return (i, it, eval_scores), norm_msg, None
-            return None, None, (prefix, f"{type(err).__name__}: {err}")
+            return None, None, (f"[{prefix}/ ERR]", f"{type(err).__name__}: {err}")
 
         async def process_afunc(
             item: tuple[int, int, DataItemType],
@@ -454,7 +454,7 @@ class BaseEvaluator:
             # Return the information based on success or failure
             if eval_scores is not None and norm_msg is not None:
                 return (i, it, eval_scores), norm_msg, None
-            return None, None, (prefix, f"{type(err).__name__}: {err}")
+            return None, None, (f"[{prefix}/ ERR]", f"{type(err).__name__}: {err}")
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(

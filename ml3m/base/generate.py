@@ -289,7 +289,7 @@ class ResponseGenerator:
             # Return the information based on success or failure
             if response is not None and norm_msg is not None:
                 return (i, response), norm_msg, None
-            return None, None, (f"[{i}]", f"{type(err).__name__}: {err}")
+            return None, None, (f"[{i}/ ERR]", f"{type(err).__name__}: {err}")
 
         async def process_afunc(
             item: tuple[int, DataItemType],
@@ -345,7 +345,7 @@ class ResponseGenerator:
             # Return the information based on success or failure
             if response is not None and norm_msg is not None:
                 return (i, response), norm_msg, None
-            return None, None, (f"[{i}]", f"{type(err).__name__}: {err}")
+            return None, None, (f"[{i}/ ERR]", f"{type(err).__name__}: {err}")
 
         # Activate the asynchronous runner (sequential mode if only one worker)
         runner = AsyncRunner(
