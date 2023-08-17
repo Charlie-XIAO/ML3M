@@ -55,6 +55,7 @@ ignore = [
     "PLC1901",
     "PERF102",
     "PERF203",
+    "RUF001",
 ]
 
 exclude = [

@@ -204,7 +204,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         stripped_reply = reply.strip()
         chosen_options: set[str] = set()
         for char in stripped_reply:
-            if char not in self.labels:
+            if not char.isspace() and char not in ",.，、" and char not in self.labels:
                 raise ValueError(f"Got '{char}' not being one of {self._labels_expr}.")
             chosen_options.add(char)
 
@@ -212,7 +212,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         _, _, expected = self.info_func(data_item)
         expected_options: set[str] = set()
         for char in expected:
-            if char not in self.labels:
+            if not char.isspace() and char not in ",.，、" and char not in self.labels:
                 raise ValueError(
                     f"FATAL: reference answer '{expected}' in the dataset is invalid."
                 )

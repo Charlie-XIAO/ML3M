@@ -193,7 +193,7 @@ def wrap_with_prefix(
     lns = []
     for i in range(max(prefix_nlns, content_nlns)):
         prefix_ln = (
-            " " * prefix_width
+            colored("│", prefix_color) + " " * (prefix_width - 1)
             if i >= prefix_nlns
             else colored(f"{prefix_lns[i]:<{prefix_width}}", prefix_color)
         )
@@ -222,9 +222,8 @@ def format_data_item(data_item: DataItemType) -> str:
     formatted_data_item : str
         The formatted data item.
     """
-    concatenator = " " + EMOJI.DIAMOND * 3 + " "
     if isinstance(data_item, list):
-        return concatenator.join(data_item)
+        return f" {EMOJI.DIAMOND} ".join(data_item)
     if isinstance(data_item, (dict, pd.Series)):
-        return concatenator.join([f"[{k}] {v}" for k, v in data_item.items()])
+        return f" {EMOJI.DIAMOND} ".join([f"[{k}] {v}" for k, v in data_item.items()])
     raise TypeError(f"Invalid data item of type {type(data_item)}.")
