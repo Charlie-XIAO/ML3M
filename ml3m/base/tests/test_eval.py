@@ -255,7 +255,7 @@ class NormalBaseOpenAIEvaluator(BaseOpenAIEvaluator):
         reference, actual = data_item["output"], data_item["response"]
         return "", f"```\n{reference}\n```\n\n```\n{actual}\n```"
 
-    def _extract_scores(self, reply):
+    def _extract_scores(self, reply, data_item):
         return int(reply)
 
 

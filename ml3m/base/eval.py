@@ -770,8 +770,10 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         """
         raise NotImplementedError
 
-    def _extract_scores(self, reply: str) -> Real | dict[Any, Real]:
-        """Extract the score(s) from the OpenAI model reply.
+    def _extract_scores(
+        self, reply: str, data_item: DataItemType
+    ) -> Real | dict[Any, Real]:
+        """Extract the score(s) from the OpenAI model reply (and the data item).
 
         :meta public:
 
@@ -782,6 +784,10 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         ----------
         reply : str
             The OpenAI model reply, from which the score(s) will be extracted.
+        data_item : DataItemType
+            The data item. This may not be used, but in case the OpenAI model reply
+            requires comparion with the data item to give the final score, the data
+            item is passed in as well.
 
         Returns
         -------
@@ -829,7 +835,9 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             else [{"role": "user", "content": eval_prompt}]
         )
 
-    def _post_scoring(self, completion: Any) -> Real | dict[Any, Real]:
+    def _post_scoring(
+        self, completion: Any, data_item: DataItemType
+    ) -> Real | dict[Any, Real]:
         """Process the OpenAI response posterior to querying.
 
         Parameters
@@ -846,7 +854,9 @@ class BaseOpenAIEvaluator(BaseEvaluator):
         finish_reason = completion["choices"][0]["finish_reason"]
         if finish_reason != "stop":
             raise ValueError(f"Model terminated by '{finish_reason}'")
-        return self._extract_scores(completion["choices"][0]["message"]["content"])
+        return self._extract_scores(
+            completion["choices"][0]["message"]["content"], data_item
+        )
 
     def _get_score(self, data_item: DataItemType, **kwargs) -> Real | dict[Any, Real]:
         """:meta private:"""
@@ -858,7 +868,7 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             api_base=kwargs["api_base"],
             **self.openai_kwargs,
         )
-        return self._post_scoring(completion)
+        return self._post_scoring(completion, data_item)
 
     async def _aget_score(
         self, data_item: DataItemType, **kwargs
@@ -875,4 +885,4 @@ class BaseOpenAIEvaluator(BaseEvaluator):
             ),
             timeout=self.timeout,
         )
-        return self._post_scoring(completion)
+        return self._post_scoring(completion, data_item)

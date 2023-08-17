@@ -257,7 +257,15 @@ class AsyncRunner:
                             max_lines=self.verbose,
                             prefix_color=COLOR.GREEN,
                         )
-                        for norm_prefix, norm_content in norm_msg
+                        for norm_prefix, norm_content in norm_msg[:-1]
+                    ] + [
+                        wrap_with_prefix(
+                            norm_msg[-1][0],
+                            norm_msg[-1][1],
+                            max_lines=self.verbose,
+                            prefix_color=COLOR.GREEN,
+                            content_color=COLOR.GREEN,
+                        )
                     ]
                     tqdm.write("\n".join(to_console_list) + "\n")
                 self.progbar.update(1)

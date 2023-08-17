@@ -158,8 +158,7 @@ def wrap_with_prefix(
     Parameters
     ----------
     prefix : Any
-        The prefix, taking 1/4 of the terminal width from the left. If the total length
-        of the prefix is fewer than that, take only its total length.
+        The prefix, taking 1/4 of the terminal width from the left.
     content : Any
         The content, taking 3/4 of the terminal width from the right.
     max_lines : int, optional
@@ -178,12 +177,6 @@ def wrap_with_prefix(
     """
     prefix_width = shutil.get_terminal_size().columns // 4 - 2  # Avoid overflow
     content_width = prefix_width * 3
-
-    # Possibly adjust the proportion
-    if len(prefix) < prefix_width:
-        difference = prefix_width - len(prefix)
-        prefix_width -= difference
-        content_width += difference
 
     # Make sure the maximum widths are enough for the placeholder
     prefix_width = max(7, prefix_width)
@@ -230,9 +223,6 @@ def format_data_item(data_item: DataItemType) -> str:
     concatenator = " " + EMOJI.DIAMOND * 3 + " "
     if isinstance(data_item, list):
         return concatenator.join(data_item)
-    elif isinstance(data_item, (dict, pd.Series)):
-        return concatenator.join(
-            [f"{colored(k, COLOR.CYAN)}: {v}" for k, v in data_item.items()]
-        )
-    else:
-        raise TypeError(f"Invalid data item of type {type(data_item)}.")
+    if isinstance(data_item, (dict, pd.Series)):
+        return concatenator.join([f"[{k}] {v}" for k, v in data_item.items()])
+    raise TypeError(f"Invalid data item of type {type(data_item)}.")

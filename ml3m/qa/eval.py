@@ -192,7 +192,9 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
             "any additional information or explanation.",
         )
 
-    def _extract_scores(self, reply: str) -> Real | dict[Any, Real]:
+    def _extract_scores(
+        self, reply: str, data_item: DataItemType
+    ) -> Real | dict[Any, Real]:
         """:meta private:"""
         scores: dict[QaSubject, Real]
         try:
@@ -229,9 +231,9 @@ class QaMetricEvaluator(BaseEvaluator):
         Whether to overwrite the existing results or to build on them depend on
         ``overwrite`` when using the :meth:`QaMetricEvaluator.evaluate` method.
     info_func : Callable
-        The function that extracts the actual answer and expected answer of a data
-        item. The input parameter should be a :class:`pandas.Series`, a list, or a
-        dictionary, depending on ``fmt`` and the specific type of each data item. The
+        The function that extracts the question, actual answer, and expected answer of
+        a data item. The input parameter should be a :class:`pandas.Series`, a list, or
+        a dictionary, depending on ``fmt`` and the specific type of each data item. The
         output should be a tuple of three strings, respectively the question, the actual
         answer to that question, and the expected answer of that question. See the notes
         for examples.
@@ -259,7 +261,8 @@ class QaMetricEvaluator(BaseEvaluator):
 
     .. code-block:: python
 
-        def info_func(data_item: dict) -> tuple[str, str]:
+        def info_func(data_item: dict) -> tuple[str, str, str]:
+            question = data_item["instruction"] + "\\n" + data_item["input"]
             actual = data_item["response"]
             expected = data_item["output"]
             return question, actual, expected
@@ -269,16 +272,16 @@ class QaMetricEvaluator(BaseEvaluator):
 
     .. code-block:: python
 
-        def info_func(data_item: pandas.Series) -> tuple[str, str]:
-            answer, response = data_item[["answer", "response"]]
-            return response, answer
+        def info_func(data_item: pandas.Series) -> tuple[str, str, str]:
+            question, answer, response = data_item[["question", "answer", "response"]]
+            return question, response, answer
     """
 
     def __init__(
         self,
         dataset: str | Path,
         save_path: str | Path,
-        info_func: Callable[[DataItemType], tuple[str, str]],
+        info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
         bleu_k: list[int] | None = None,
@@ -313,7 +316,7 @@ class QaMetricEvaluator(BaseEvaluator):
 
     def _get_score(self, data_item: DataItemType, **kwargs) -> Real | dict[Any, Real]:
         """:meta private:"""
-        actual, expected = self.info_func(data_item)
+        _, actual, expected = self.info_func(data_item)
         scores = {}
 
         # Compute the desired BLEU scores

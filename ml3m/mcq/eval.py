@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from ..base.eval import BaseOpenAIEvaluator
+from ..errors import InvalidParameterError
 
 if TYPE_CHECKING:
     from numbers import Real
@@ -31,17 +32,23 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         The absolute path to the OpenAI configuration file.
     info_func : Callable
         The function that extracts the question, actual answer, and expected answer of
-        a data item (specifically, a multiple-choice question). The input parameter
-        should be a :class:`pandas.Series`, a list, or a dictionary, depending on
-        ``fmt`` and the specific type of each data item. The output should be a tuple
-        of three strings, respectively the question, the actual answer to that question,
-        and the expected answer of that question. See the notes for examples.
+        a data item. The input parameter should be a :class:`pandas.Series`, a list, or
+        a dictionary, depending on ``fmt`` and the specific type of each data item. The
+        output should be a tuple of three strings, respectively the question, the actual
+        answer to that question, and the expected answer of that question. See the notes
+        for examples.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
     score_name : str, default="score"
         The key/column name to use for the obtained score. This should *not* be a key
         or column name that already exists in the save location. Be extremely careful
         since there will be *no* warning or exception raised on this.
+    label_type : {"upper", "lower", "digit"}, default="upper"
+        The type of the option labels. "upper" stands for A, B, C, D, ... "lower"
+        stands for a, b, c, d, ... "digit" stands for 1, 2, 3, 4, ...
+    label_cnt : int, default=4
+        The number of options. For instance, ``label_type="upper"`` with
+        ``label_cnt=4`` means that the option labels are A, B, C, and D.
     setting: str, optional
         The personality setting for the OpenAI model, passed as the system message. If
         ``None``, then no system message is used.
@@ -105,6 +112,8 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         *,
         fmt: DatasetFormat = "jsonl",
         score_name: str = "score",
+        label_type: Literal["upper", "lower", "digit"] = "upper",
+        label_cnt: int = 4,
         setting: str | None = None,
         n_iter: int = 1,
         timeout: float = 60,
@@ -114,11 +123,43 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
     ) -> None:
         self.info_func = info_func
         self.score_name = score_name
+        self.label_type = label_type
+        self.label_cnt = label_cnt
         self.setting = setting
 
         # Validate the arguments
         if not callable(self.info_func):
-            raise ValueError("Invalid info_func; must be a callable.")
+            raise InvalidParameterError(
+                "info_func",
+                actual=self.info_func,
+                reason="must be a callable",
+            )
+        if label_type not in ["upper", "lower", "digit"]:
+            raise InvalidParameterError(
+                "label_type",
+                actual=self.label_type,
+                reason="must be one of 'upper', 'lower', and 'digit'.",
+            )
+        if not isinstance(label_cnt, int) or label_cnt <= 1:
+            raise InvalidParameterError(
+                "label_cnt",
+                actual=self.label_cnt,
+                reason="must be an integer > 1",
+            )
+
+        # Determine the actual labels
+        self.labels: list[str]
+        if label_type == "upper":
+            if self.label_cnt > 26:
+                raise ValueError("'label_type=upper' supports at most 26 labels.")
+            self.labels = [chr(65 + i) for i in range(self.label_cnt)]
+        elif label_type == "lower":
+            if self.label_cnt > 26:
+                raise ValueError("'label_type=lower' supports at most 26 labels.")
+            self.labels = [chr(97 + i) for i in range(self.label_cnt)]
+        else:  # label_type == "digit"
+            self.labels = [str(i + 1) for i in range(self.label_cnt)]
+        self._labels_expr = ", ".join(self.labels[:-1]) + f", and {self.labels[-1]}"
 
         # Inherit from parent
         super().__init__(
@@ -137,27 +178,42 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
 
     def _prompt(self, data_item: DataItemType) -> tuple[str, str]:
         """:meta private:"""
-        question, actual, expected = self.info_func(data_item)
+        _, actual, _ = self.info_func(data_item)
         return (
             "" if self.setting is None else self.setting,
-            f"### As follows is a multiple-choice question:\n```\n{question}\n```\n\n"
-            f"### The correct answer to this question is: {actual}\n\n### My answer "
-            f"to this question is:\n```\n{expected}\n```\n\nIf my answer is correct, "
-            "reply '1'. If my answer is incorrect, reply '0'. Do not include any "
-            "additional information.",
+            "I will provide an example pair of input and output. Then I will give an "
+            "input, and please give the corresponding output following the format of "
+            "the example.\n\n### Input:\n\nAs follows is my answer to a multiple-"
+            "choice question with options A, B, C, and D:\n```\nA. “一个玻璃水杯,写明该"
+            "产品由透明材料制成”是错误的\nB. “一套茶具,写明套件 1 为茶壶,套件 2 为茶杯,"
+            "套件 3 为茶碟”是正确的\nC. “一款汽车,写明其为新能源动力驱动”是错误的\nD. "
+            "“一幅花布,写明其单元图案为四方连续无限定边界并请求保护色彩”是错误的\n```\n"
+            "Please tell which options my answer considers correct to the multiple-"
+            "choice question.\n\n### Output:\n\nAC\n\n### Input:\n\nAs follows is my "
+            f"answer to a multiple-choice question with options {self._labels_expr}:\n"
+            f"```\n{actual}\n```\nPlease tell which options my answer considers "
+            "correct to the multiple-choice question.\n\n### Output:",
         )
 
-    def _extract_scores(self, reply: str) -> Real | dict[Any, Real]:
+    def _extract_scores(
+        self, reply: str, data_item: DataItemType
+    ) -> Real | dict[Any, Real]:
         """:meta private:"""
         stripped_reply = reply.strip()
-        if stripped_reply == "1":
-            # mypy not working with numbers.Real
-            return 100  # type: ignore[return-value]
-        elif stripped_reply == "0":
-            # mypy not working with numbers.Real
-            return 0  # type: ignore[return-value]
-        else:
-            raise ValueError(
-                "The expected OpenAI response is 0 (incorrect answer) or 1 (correct "
-                f"answer); got '{reply}' instead."
-            )
+        chosen_options: set[str] = set()
+        for char in stripped_reply:
+            if char not in self.labels:
+                raise ValueError(f"Got '{char}' not being one of {self._labels_expr}.")
+            chosen_options.add(char)
+
+        # Compare with the reference answer
+        _, _, expected = self.info_func(data_item)
+        expected_options: set[str] = set()
+        for char in expected:
+            if char not in self.labels:
+                raise ValueError(
+                    f"FATAL: reference answer '{expected}' in the dataset is invalid."
+                )
+            expected_options.add(char)
+        # mypy not working with numbers.Real
+        return (expected_options == chosen_options) * 100  # type: ignore[return-value]

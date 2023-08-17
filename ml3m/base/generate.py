@@ -257,7 +257,16 @@ class ResponseGenerator:
                 # In that case, `self.query_func` is already validated synchrnous
                 formatted_query = self.info_func(data_item)
                 response = self.query_func(formatted_query)
-                norm_msg = [(f"[{i}/ QY]", formatted_query), (f"[{i}/ RE]", response)]
+                norm_msg = []
+                if isinstance(formatted_query, dict):
+                    for k, v in formatted_query.items():
+                        norm_msg.append((f"[{i}/ QY.{k}]", v))
+                elif isinstance(formatted_query, (list, tuple)):
+                    for k, v in enumerate(formatted_query):
+                        norm_msg.append((f"[{i}/ QY.{k}]", v))
+                else:
+                    norm_msg.append((f"[{i}/ QY]", formatted_query))
+                norm_msg.append((f"[{i}/ RE]", response))
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
@@ -302,7 +311,16 @@ class ResponseGenerator:
                 # In that case, `self.query_func` is already validated asynchronous
                 formatted_query = self.info_func(data_item)
                 response = await self.query_func(formatted_query)  # type: ignore[misc]
-                norm_msg = [(f"[{i}/ QY]", formatted_query), (f"[{i}/ RE]", response)]
+                norm_msg = []
+                if isinstance(formatted_query, dict):
+                    for k, v in formatted_query.items():
+                        norm_msg.append((f"[{i}/ QY.{k}]", v))
+                elif isinstance(formatted_query, (list, tuple)):
+                    for k, v in enumerate(formatted_query):
+                        norm_msg.append((f"[{i}/ QY.{k}]", v))
+                else:
+                    norm_msg.append((f"[{i}/ QY]", formatted_query))
+                norm_msg.append((f"[{i}/ RE]", response))
             except Exception as e:
                 err, err_trace = e, traceback.format_exc()
 
