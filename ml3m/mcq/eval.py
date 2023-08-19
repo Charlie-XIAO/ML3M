@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import re
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from ..base.eval import BaseOpenAIEvaluator
@@ -150,8 +152,8 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         # Determine the actual labels
         self.labels: list[str]
         if label_type == "upper":
-            if self.label_cnt > 26:
-                raise ValueError("'label_type=upper' supports at most 26 labels.")
+            if self.label_cnt > 13:
+                raise ValueError("'label_type=upper' supports at most 13 labels.")
             self.labels = [chr(65 + i) for i in range(self.label_cnt)]
         elif label_type == "lower":
             if self.label_cnt > 26:
@@ -159,7 +161,17 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
             self.labels = [chr(97 + i) for i in range(self.label_cnt)]
         else:  # label_type == "digit"
             self.labels = [str(i + 1) for i in range(self.label_cnt)]
-        self._labels_expr = ", ".join(self.labels[:-1]) + f", and {self.labels[-1]}"
+
+        # Prepare for querying and reply processing
+        label_grp = "|".join(self.labels)
+        label_spls = [
+            "".join(sorted(random.sample(self.labels, i + 1)))
+            for i in range(min(3, self.label_cnt))
+        ]
+        self._few_shot = ", ".join(f"'{spl}'" for spl in label_spls)
+        self._pat = re.compile(
+            rf"selected option(?:\(s\)|s)? (is|are|is/are):? ([{label_grp}]+)"
+        )
 
         # Inherit from parent
         super().__init__(
@@ -178,23 +190,24 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
 
     def _prompt(self, data_item: DataItemType) -> tuple[str, str]:
         """:meta private:"""
-        _, actual, _ = self.info_func(data_item)
+        question, actual, _ = self.info_func(data_item)
         return (
             "" if self.setting is None else self.setting,
-            "In this task, I will provide you an answer to a multiple-choice question "
-            "with options A, B, C, and D, but the question itself will not be given. "
-            "I want you to tell which options the answer selects as the solution to "
-            "the multiple-choice question. The criteria are as follows:\n- If the "
-            "answer explicitly mentions which are correct and which are wrong, it "
-            "selects the correct ones.\n- If the answer only mentions which are "
-            "wrong, it selects the rest.\n- If the answer only listed some options "
-            "without saying whether they are correct or wrong, it selects all options "
-            "it listed.\n- If the answer provides a paragraph of analysis, judge from "
-            "that analysis which options are selected.\nNote that when you respond, "
-            "you should only output the selected labels. For instance, if the answer "
-            "selects B and C, you should output 'BC'. Do not include any additional "
-            f"information.\n\nThe options are {self._labels_expr}. The answer is:\n```"
-            f"\n{actual}\n```\n\nThe selected option(s) is/are:",
+            "In this task, I will provide you a multiple-choice question and a "
+            "student's answer to it. I want you to tell which options the student has "
+            "selected as the solution to the multiple-choice question. The criteria "
+            "are as follows:\n- If the student's answer explicitly mentions which "
+            "are correct and which are wrong, he selects the correct ones.\n- If the "
+            "student's answer only lists several (or all) options without saying "
+            "whether they are correct or wrong, he selects all options he has listed."
+            "\n- If none of the above criteria applies to the student's answer, judge "
+            "from the content of his answer.\n\nThe multiple-choice question is:\n```"
+            f"\n{question}\n```\n\nThe student's answer is:\n```\n{actual}\n```\n\n"
+            "Remember that when you output the student's selected options, only "
+            f"include the labels in the format e.g. {self._few_shot}. If the student "
+            "selects none of the options, output only 'N'. Do not include any "
+            "explanation or addidtional information! The student's selected option(s) "
+            "is/are:",
         )
 
     def _extract_scores(
@@ -202,12 +215,18 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
     ) -> Real | dict[Any, Real]:
         """:meta private:"""
         stripped_reply = reply.strip()
+
+        # Try to match the reply pattern in advance if possible
+        mat = re.search(self._pat, stripped_reply)
+        if mat is not None:
+            stripped_reply = mat.group(2)
+
+        # Construct the set of chosen options
         chosen_options: set[str] = set()
         for char in stripped_reply:
             if not char.isspace() and char not in ",.，、" and char not in self.labels:
                 raise ValueError(
-                    f"Got '{char}' as in '{stripped_reply}' not being one of "
-                    f"{self._labels_expr}."
+                    f"Got invalid character '{char}' in '{stripped_reply}'."
                 )
             chosen_options.add(char)
 
@@ -217,7 +236,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         for char in expected:
             if not char.isspace() and char not in ",.，、" and char not in self.labels:
                 raise ValueError(
-                    f"FATAL: reference answer '{expected}' in the dataset is invalid."
+                    f"[FATAL] Got invalid reference answer '{expected}' in the dataset."
                 )
             expected_options.add(char)
         # mypy not working with numbers.Real
