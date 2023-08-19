@@ -205,7 +205,10 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         chosen_options: set[str] = set()
         for char in stripped_reply:
             if not char.isspace() and char not in ",.，、" and char not in self.labels:
-                raise ValueError(f"Got '{char}' not being one of {self._labels_expr}.")
+                raise ValueError(
+                    f"Got '{char}' as in '{stripped_reply}' not being one of "
+                    f"{self._labels_expr}."
+                )
             chosen_options.add(char)
 
         # Compare with the reference answer
