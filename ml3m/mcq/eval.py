@@ -210,11 +210,33 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
             "is/are:",
         )
 
+    def _is_valid_char(self, char: str) -> bool:
+        """Check whether a character extracted from the OpenAI reply is valid.
+
+        Parameters
+        ----------
+        char : str
+            The character to check. Should be a single character.
+
+        Returns
+        -------
+        is_valid : bool
+            Whether the character is valid.
+        """
+        return (
+            char.isspace()  # White-space character
+            or char in ",.，、"  # Punctuation
+            or char in self.labels  # Option labels
+        )
+
     def _extract_scores(
         self, reply: str, data_item: DataItemType
     ) -> Real | dict[Any, Real]:
         """:meta private:"""
         stripped_reply = reply.strip()
+        if stripped_reply.lower() == "n":
+            # mypy not working with numbers.Real
+            return 0  # type: ignore[return-value]
 
         # Try to match the reply pattern in advance if possible
         mat = re.search(self._pat, stripped_reply)
@@ -224,7 +246,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         # Construct the set of chosen options
         chosen_options: set[str] = set()
         for char in stripped_reply:
-            if not char.isspace() and char not in ",.，、" and char not in self.labels:
+            if not self._is_valid_char(char):
                 raise ValueError(
                     f"Got invalid character '{char}' in '{stripped_reply}'."
                 )
@@ -234,7 +256,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         _, _, expected = self.info_func(data_item)
         expected_options: set[str] = set()
         for char in expected:
-            if not char.isspace() and char not in ",.，、" and char not in self.labels:
+            if not self._is_valid_char(char):
                 raise ValueError(
                     f"[FATAL] Got invalid reference answer '{expected}' in the dataset."
                 )
