@@ -171,7 +171,9 @@ class ResponseGenerator:
                     ):
                         yield i, data_item
             else:  # self.format == "csv"
-                assert isinstance(self._all_data, pd.DataFrame)
+                assert isinstance(
+                    self._all_data, pd.DataFrame
+                ), "wrong data format; this is most likely an ml3m bug."
                 if self.response_name not in self._all_data.columns:
                     # pd.DataFrame index is Hashable | None, must asserting we get int
                     for (  # type: ignore[assignment]
@@ -190,7 +192,9 @@ class ResponseGenerator:
                 for i, data_item in enumerate(self._all_data):
                     yield i, data_item
             else:  # self.format == "csv"
-                assert isinstance(self._all_data, pd.DataFrame)
+                assert isinstance(
+                    self._all_data, pd.DataFrame
+                ), "wrong data format; this is most likely an ml3m bug."
                 # pd.DataFrame index is Hashable | None, must asserting we get int
                 for (  # type: ignore[assignment]
                     i,
@@ -337,7 +341,9 @@ class ResponseGenerator:
                     "norm_msg": str(norm_msg),
                     "err_msg": err_trace,
                 }
-                assert isinstance(addtlks, list)
+                assert (
+                    isinstance(addtlks, list) and len(addtlks) >= 1
+                ), "no lock for log in async mode; this is most likely an ml3m bug."
                 async with addtlks[0]:
                     with open(mlog_path, "a", encoding="utf-8") as f:
                         f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
@@ -378,7 +384,9 @@ class ResponseGenerator:
                 else:  # self.fmt == "json"
                     json.dump(self._all_data, f, ensure_ascii=False, indent=4)
         else:  # self.fmt == "csv"
-            assert isinstance(self._all_data, pd.DataFrame)
+            assert isinstance(
+                self._all_data, pd.DataFrame
+            ), "wrong data format; this is most likely an ml3m bug."
             for i, response in result_responses.items():
                 self._all_data.at[i, self.response_name] = response
             for i in failed_indices:

@@ -205,7 +205,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         # Try to search for a code block in the reply; if errored, leave as is
         except:
             match = re.search(self._pattern, reply)
-            assert match is not None
+            assert match is not None, "backup pattern matching failed."
             scores = {
                 subject.lower(): score
                 for subject, score in json.loads(match.group(1)).items()

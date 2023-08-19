@@ -446,7 +446,9 @@ class BaseEvaluator:
                     "norm_msg": str(norm_msg),
                     "err_msg": err_trace,
                 }
-                assert isinstance(addtlks, list)
+                assert (
+                    isinstance(addtlks, list) and len(addtlks) >= 1
+                ), "no lock for log in async mode; this is most likely an ml3m bug."
                 async with addtlks[0]:
                     with open(mlog_path, "a", encoding="utf-8") as f:
                         f.write(json.dumps(mlog_item, ensure_ascii=False) + "\n")
