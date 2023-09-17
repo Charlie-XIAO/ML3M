@@ -233,10 +233,7 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
         self, reply: str, data_item: DataItemType
     ) -> Real | dict[Any, Real]:
         """:meta private:"""
-        stripped_reply = reply.strip()
-        if stripped_reply.lower() == "n":
-            # mypy not working with numbers.Real
-            return 0  # type: ignore[return-value]
+        stripped_reply: str = reply.strip()
 
         # Try to match the reply pattern in advance if possible
         mat = re.search(self._pat, stripped_reply)
@@ -245,12 +242,13 @@ class McqOpenAIEvaluator(BaseOpenAIEvaluator):
 
         # Construct the set of chosen options
         chosen_options: set[str] = set()
-        for char in stripped_reply:
-            if not self._is_valid_char(char):
-                raise ValueError(
-                    f"Got invalid character '{char}' in '{stripped_reply}'."
-                )
-            chosen_options.add(char)
+        if stripped_reply.lower() != "n":
+            for char in stripped_reply:
+                if not self._is_valid_char(char):
+                    raise ValueError(
+                        f"Got invalid character '{char}' in '{stripped_reply}'."
+                    )
+                chosen_options.add(char)
 
         # Compare with the reference answer
         _, _, expected = self.info_func(data_item)

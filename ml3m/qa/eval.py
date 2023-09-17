@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from numbers import Real
     from pathlib import Path
 
-    from .._typing import DataItemType, DatasetFormat, LoggingMode, QaSubject
+    from .._typing import DataItemType, DatasetFormat, LoggingMode
 
 
 class QaOpenAIEvaluator(BaseOpenAIEvaluator):
@@ -48,8 +48,15 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         for examples.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
-    aspects : list of {"accuracy", "completeness", "clarity"}, optional
-        The aspects to evaluate. If ``None``, evaluate all available aspects.
+    aspects : list of str, optional
+        The aspects to evaluate. If ``None``, evalute accuracy, completeness, and
+        clarity. If there is any string other than "accuracy", "completeness", and
+        "clarity", then they have to be specified in ``aspect_descriptions``.
+    aspect_descriptions : dict, optional
+        An optional dictionary mapping aspects to their descriptions. "accuracy",
+        "completeness", and "clarity" have default descriptions but can also be
+        overridden by this parameter. Any other aspect, if used in ``aspects``, must
+        exist as a key here.
     setting: str, optional
         The personality setting for the OpenAI model, passed as the system message. If
         ``None``, then no system message is used.
@@ -108,7 +115,8 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
-        aspects: list[QaSubject] | None = None,
+        aspects: list[str] | None = None,
+        aspect_descriptions: dict[str, str] | None = None,
         setting: str | None = None,
         n_iter: int = 3,
         timeout: float = 60,
@@ -120,42 +128,60 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         self.setting = setting
 
         # Determine the aspects to evaluate on
-        avail_aspects: list[QaSubject] = ["accuracy", "completeness", "clarity"]
+        avail_aspects: list[str] = ["accuracy", "completeness", "clarity"]
         self.aspects = avail_aspects if aspects is None else aspects
+        self.aspect_descriptions = (
+            aspect_descriptions
+            if aspect_descriptions is not None
+            else {
+                "accuracy": (
+                    "Using the reference answer as the ground truth, does my answer "
+                    "include factually incorrect information?"
+                ),
+                "completeness": (
+                    "Compared with the reference answer, is my answer missing details?"
+                ),
+                "clarity": (
+                    "Is my answer well-organized and clearly presented? If accuracy "
+                    "and completeness is bad, clarity should also be bad."
+                ),
+            }
+        )
 
         # Validate the arguments
         if not callable(self.info_func):
             raise InvalidParameterError(
                 "info_func", actual=self.info_func, reason="must be a callable"
             )
-        if any(subject not in avail_aspects for subject in self.aspects) or len(
-            self.aspects
-        ) != len(set(self.aspects)):
+        if not isinstance(self.aspects, list):
+            raise InvalidParameterError(
+                "aspects", actual=self.aspects, reason="must be a list"
+            )
+        if not isinstance(self.aspect_descriptions, dict):
+            raise InvalidParameterError(
+                "aspect_descriptions",
+                actual=self.aspect_descriptions,
+                reason="must be a dictionary",
+            )
+        if (
+            any(subject not in self.aspect_descriptions for subject in self.aspects)
+            or len(self.aspects) != len(set(self.aspects))
+            or len(self.aspects) == 0
+        ):
             raise InvalidParameterError(
                 "aspects",
                 actual=self.aspects,
                 reason=(
-                    f"must be a list of non-duplicated aspects among {avail_aspects}"
+                    "must be a list of non-duplicated aspects among "
+                    f"{list(self.aspect_descriptions)}"
                 ),
             )
 
         # Set the subject explanations
-        self._explanations: list[str] = []
-        if "accuracy" in self.aspects:
-            self._explanations.append(
-                "accuracy: Using the reference answer as the ground truth, does my "
-                "answer include factually incorrect information?"
-            )
-        if "completeness" in self.aspects:
-            self._explanations.append(
-                "completeness: Compared with the reference answer, is my answer "
-                "missing details?"
-            )
-        if "clarity" in self.aspects:
-            self._explanations.append(
-                "clarity: Is my answer well-organized and clearly presented? If "
-                "accuracy and completeness is bad, clarity should also be bad."
-            )
+        self._explanations: list[str] = [
+            f"{subject}: {self.aspect_descriptions[subject]}"
+            for subject in self.aspects
+        ]
 
         # Inherit from parent
         super().__init__(
@@ -196,7 +222,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         self, reply: str, data_item: DataItemType
     ) -> Real | dict[Any, Real]:
         """:meta private:"""
-        scores: dict[QaSubject, Real]
+        scores: dict[str, Real]
         try:
             scores = {
                 subject.lower(): score for subject, score in json.loads(reply).items()
