@@ -1,6 +1,6 @@
 from ._version import show_versions
 
-__version__ = "0.0.17"
+__version__ = "0.0.18"
 
 __all__ = [
     # Submodules
