@@ -57,9 +57,6 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         "completeness", and "clarity" have default descriptions but can also be
         overridden by this parameter. Any other aspect, if used in ``aspects``, must
         exist as a key here.
-    setting: str, optional
-        The personality setting for the OpenAI model, passed as the system message. If
-        ``None``, then no system message is used.
     n_iter : int, default=3
         The number of iterations for each data item. The mean of the scores for each
         data item will be taken as the final score.
@@ -117,7 +114,6 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         fmt: DatasetFormat = "jsonl",
         aspects: list[str] | None = None,
         aspect_descriptions: dict[str, str] | None = None,
-        setting: str | None = None,
         n_iter: int = 3,
         timeout: float = 60,
         model: str = "gpt-3.5-turbo",
@@ -125,28 +121,25 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         verbose: int = 0,
     ) -> None:
         self.info_func = info_func
-        self.setting = setting
 
         # Determine the aspects to evaluate on
         avail_aspects: list[str] = ["accuracy", "completeness", "clarity"]
         self.aspects = avail_aspects if aspects is None else aspects
-        self.aspect_descriptions = (
-            aspect_descriptions
-            if aspect_descriptions is not None
-            else {
-                "accuracy": (
-                    "Using the reference answer as the ground truth, does my answer "
-                    "include factually incorrect information?"
-                ),
-                "completeness": (
-                    "Compared with the reference answer, is my answer missing details?"
-                ),
-                "clarity": (
-                    "Is my answer well-organized and clearly presented? If accuracy "
-                    "and completeness is bad, clarity should also be bad."
-                ),
-            }
-        )
+        self.aspect_descriptions = {
+            "accuracy": (
+                "Using the reference answer as the ground truth, does my answer "
+                "include factually incorrect information?"
+            ),
+            "completeness": (
+                "Compared with the reference answer, is my answer missing details?"
+            ),
+            "clarity": (
+                "Is my answer well-organized and clearly presented? If accuracy and "
+                "completeness is bad, clarity should also be bad."
+            ),
+        }
+        if aspect_descriptions is not None:
+            self.aspect_descriptions.update(aspect_descriptions)
 
         # Validate the arguments
         if not callable(self.info_func):
@@ -156,12 +149,6 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         if not isinstance(self.aspects, list):
             raise InvalidParameterError(
                 "aspects", actual=self.aspects, reason="must be a list"
-            )
-        if not isinstance(self.aspect_descriptions, dict):
-            raise InvalidParameterError(
-                "aspect_descriptions",
-                actual=self.aspect_descriptions,
-                reason="must be a dictionary",
             )
         if (
             any(subject not in self.aspect_descriptions for subject in self.aspects)
@@ -208,14 +195,16 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
             ]
         )
         return (
-            "" if self.setting is None else self.setting,
-            f"### Question\n```\n{question}\n```\n\n### My answer\n```\n{actual}\n```"
-            f"\n\n### Reference answer\n```\n{expected}\n```\n\n### Scoring\n\nI want "
-            "you to score my answer based on the reference answer in the following "
-            f"aspects:\n{explanation_expr}\n\nEach score should be from 1 to 5. Be "
-            "very strict. In your response, you should only include a JSON object, "
-            "with keys being the aspects and values being the scores. Do not include "
-            "any additional information or explanation.",
+            "You are a professional, impartial, and strict scorer. You will be given "
+            "a question, a pending scored answer, and a reference answer. Please "
+            "rate the pending scored answer based on the reference answer in the "
+            f"following aspects:\n{explanation_expr}\n\nEach score should be from 1 "
+            "to 5. Your rating should be strict enough, and do not easily give full "
+            "scores. In your response, you should only include a JSON object, with "
+            "keys being the aspects and values being the scores. Do not include any "
+            "additional information or explanation.",
+            f"### Question\n```\n{question}\n```\n\n### Reference answer\n```\n"
+            f"{expected}\n```\n\n### Pending scored answer\n```\n{actual}\n```",
         )
 
     def _extract_scores(
