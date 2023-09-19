@@ -48,6 +48,10 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         for examples.
     fmt : {"jsonl", "json", "csv"}, default="jsonl"
         The format of ``dataset``.
+    domain : str, optional
+        The domain of knowledge. ChatGPT will be prompted to know that your question,
+        answer, and reference answer are "in {domain}". If ``None``, then this
+        information will not be given to ChatGPT.
     aspects : list of str, optional
         The aspects to evaluate. If ``None``, evalute accuracy, completeness, and
         clarity. If there is any string other than "accuracy", "completeness", and
@@ -112,6 +116,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         info_func: Callable[[DataItemType], tuple[str, str, str]],
         *,
         fmt: DatasetFormat = "jsonl",
+        domain: str | None = None,
         aspects: list[str] | None = None,
         aspect_descriptions: dict[str, str] | None = None,
         n_iter: int = 3,
@@ -121,6 +126,7 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         verbose: int = 0,
     ) -> None:
         self.info_func = info_func
+        self.domain = domain
 
         # Determine the aspects to evaluate on
         avail_aspects: list[str] = ["accuracy", "completeness", "clarity"]
@@ -165,10 +171,11 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
             )
 
         # Set the subject explanations
-        self._explanations: list[str] = [
+        self._explanations = [
             f"{subject}: {self.aspect_descriptions[subject]}"
             for subject in self.aspects
         ]
+        self._domain = "" if self.domain is None else f" in {self.domain}"
 
         # Inherit from parent
         super().__init__(
@@ -196,13 +203,13 @@ class QaOpenAIEvaluator(BaseOpenAIEvaluator):
         )
         return (
             "You are a professional, impartial, and strict scorer. You will be given "
-            "a question, a pending scored answer, and a reference answer. Please "
-            "rate the pending scored answer based on the reference answer in the "
-            f"following aspects:\n{explanation_expr}\n\nEach score should be from 1 "
-            "to 5. Your rating should be strict enough, and do not easily give full "
-            "scores. In your response, you should only include a JSON object, with "
-            "keys being the aspects and values being the scores. Do not include any "
-            "additional information or explanation.",
+            "a question, a pending scored answer, and a reference answer "
+            f"{self._domain}. Please rate the pending scored answer based on the "
+            f"reference answer in the following aspects:\n{explanation_expr}\n\nEach "
+            "score should be from 1 to 5. Your rating should be strict enough, and do "
+            "not easily give full scores. In your response, you should only include a "
+            "JSON object, with keys being the aspects and values being the scores. Do "
+            "not include any additional information or explanation.",
             f"### Question\n```\n{question}\n```\n\n### Reference answer\n```\n"
             f"{expected}\n```\n\n### Pending scored answer\n```\n{actual}\n```",
         )
