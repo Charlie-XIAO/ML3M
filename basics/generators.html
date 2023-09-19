@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generating Model Responses &mdash; ml3m  documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Evaluating Model Performance" href="evaluators.html" />
+    <link rel="prev" title="Installation" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            ml3m
+          </a>
+              <div class="version">
+                0.0.20
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Generating Model Responses</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#dataset-formats-and-data-items">Dataset Formats and Data Items</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#defining-the-querying-function">Defining the Querying Function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generating-the-responses">Generating the Responses</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generating-the-responses-of-multiple-models">Generating the Responses of Multiple Models</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="evaluators.html">Evaluating Model Performance</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules/ml3m.base.html">ml3m.base</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/ml3m.errors.html">ml3m.errors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/ml3m.mcq.html">ml3m.mcq</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/ml3m.qa.html">ml3m.qa</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/ml3m.utils.openai.html">ml3m.utils.openai</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">ml3m</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Generating Model Responses</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/basics/generators.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="generating-model-responses">
+<span id="generators"></span><h1>Generating Model Responses<a class="headerlink" href="#generating-model-responses" title="Permalink to this heading"></a></h1>
+<p>The first step to evaluate the performance of an LLM is to generate its responses to
+the evaluation datasets.</p>
+<p>Commonly evaluation datasets are in the same form as training datasets, in which each
+data item contains an input and an output (or information sufficient to construct the
+input and the output). This output, in an evaluation dataset, can be treated as <em>ground
+truth</em> or <em>reference output</em>, which is what we except our LLM to respond based on the
+corresponding input.</p>
+<p>ml3m provides the functionality to generate model responses and append them to the
+original evaluation dataset. The relevant class is:</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator" title="ml3m.base.ResponseGenerator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">base.ResponseGenerator</span></code></a></p></td>
+<td><p>Generate responses and combine with the original dataset.</p></td>
+</tr>
+</tbody>
+</table>
+<p>To use <a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator" title="ml3m.base.ResponseGenerator"><code class="xref py py-class docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator</span></code></a>, you would need to prepare an original
+evaluation dataset <code class="docutils literal notranslate"><span class="pre">orig_dataset</span></code> and a saving location <code class="docutils literal notranslate"><span class="pre">dataset</span></code> for storing the
+original data <em>and</em> the responses. The reason for not updating <code class="docutils literal notranslate"><span class="pre">orig_dataset</span></code> in
+place is to keep the original evaluation dataset clean for other possible use. There
+are currently three supported formats, as will be introduced next.</p>
+<section id="dataset-formats-and-data-items">
+<span id="dataset-format"></span><h2>Dataset Formats and Data Items<a class="headerlink" href="#dataset-formats-and-data-items" title="Permalink to this heading"></a></h2>
+<p>For now, let us suppose <code class="docutils literal notranslate"><span class="pre">response_name=&quot;my_response&quot;</span></code>, which is a required parameter
+to the <a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator" title="ml3m.base.ResponseGenerator"><code class="xref py py-class docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator</span></code></a> specifying the key/column name of the
+response. However, in practice you should be extremely careful when picking
+<code class="docutils literal notranslate"><span class="pre">response_name</span></code>; it should not be a key/column name that exists in <code class="docutils literal notranslate"><span class="pre">orig_dataset</span></code>.</p>
+<details>
+<summary><code>jsonl</code></summary>
+<p></p><p><code class="docutils literal notranslate"><span class="pre">jsonl</span></code> is the default dataset format. As follows is a simple example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;instruction&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span> <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;Beijing.&quot;</span><span class="p">}</span>
+<span class="p">{</span><span class="s2">&quot;instruction&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span> <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;Paris.&quot;</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>In this case, each line of the dataset is considered as a data item, loaded as a
+dictionary, e.g., <code class="docutils literal notranslate"><span class="pre">{&quot;instruction&quot;:</span> <span class="pre">&quot;What</span> <span class="pre">is</span> <span class="pre">the</span> <span class="pre">capital</span> <span class="pre">of</span> <span class="pre">China?&quot;,</span> <span class="pre">&quot;output&quot;:</span>
+<span class="pre">&quot;Beijing.&quot;}</span></code>. The resulting dataset will be of the same format, which looks like the
+following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;instruction&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span> <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;Beijing.&quot;</span><span class="p">,</span> <span class="s2">&quot;my_response&quot;</span><span class="p">:</span> <span class="s2">&quot;xxx&quot;</span><span class="p">}</span>
+<span class="p">{</span><span class="s2">&quot;instruction&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span> <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;Paris.&quot;</span><span class="p">,</span> <span class="s2">&quot;my_response&quot;</span><span class="p">:</span> <span class="s2">&quot;xxx&quot;</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>One other possible example in the <code class="docutils literal notranslate"><span class="pre">jsonl</span></code> format is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span> <span class="s2">&quot;Beijing.&quot;</span><span class="p">]</span>
+<span class="p">[</span><span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span> <span class="s2">&quot;Paris.&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>In this case, each data item will be loaded as a list, e.g.,
+<code class="docutils literal notranslate"><span class="pre">[&quot;What</span> <span class="pre">is</span> <span class="pre">the</span> <span class="pre">capital</span> <span class="pre">of</span> <span class="pre">China?&quot;,</span> <span class="pre">&quot;Beijing.&quot;]</span></code>, and the resulting dataset will be in
+the following form:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span> <span class="s2">&quot;Beijing.&quot;</span><span class="p">],</span> <span class="s2">&quot;my_response&quot;</span><span class="p">:</span> <span class="s2">&quot;xxx&quot;</span><span class="p">}</span>
+<span class="p">{</span><span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span> <span class="s2">&quot;Paris.&quot;</span><span class="p">],</span> <span class="s2">&quot;my_response&quot;</span><span class="p">:</span> <span class="s2">&quot;xxx&quot;</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>However, this second example is <em>not recommended</em>.</p>
+</details>
+<p></p>
+
+<details>
+<summary><code>json</code></summary>
+<p></p><p>The <code class="docutils literal notranslate"><span class="pre">json</span></code> format needs to be specified by <code class="docutils literal notranslate"><span class="pre">fmt=&quot;json&quot;</span></code>. As follows is a simple
+example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;instruction&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;Beijing.&quot;</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;instruction&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;Paris.&quot;</span>
+    <span class="p">}</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>The overall dataset <em>must</em> be loaded as a JSON array, where each object in that array
+will be considered as a data item, e.g., <code class="docutils literal notranslate"><span class="pre">{&quot;instruction&quot;:</span> <span class="pre">&quot;What</span> <span class="pre">is</span> <span class="pre">the</span> <span class="pre">capital</span> <span class="pre">of</span>
+<span class="pre">China?&quot;,</span> <span class="pre">&quot;output&quot;:</span> <span class="pre">&quot;Beijing.&quot;}</span></code> of type <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></a>. The resulting dataset will be
+of the same format, which looks like the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;instruction&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;Beijing.&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;my_response&quot;</span><span class="p">:</span> <span class="s2">&quot;xxx&quot;</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;instruction&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;output&quot;</span><span class="p">:</span> <span class="s2">&quot;Paris.&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;my_response&quot;</span><span class="p">:</span> <span class="s2">&quot;xxx&quot;</span>
+    <span class="p">}</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>One other possible example in the <code class="docutils literal notranslate"><span class="pre">json</span></code> format is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
+    <span class="p">[</span>
+        <span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Beijing.&quot;</span>
+    <span class="p">],</span>
+    <span class="p">[</span>
+        <span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Paris.&quot;</span>
+    <span class="p">]</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>In this case, each data item will be loaded as a list, e.g.,
+<code class="docutils literal notranslate"><span class="pre">[&quot;What</span> <span class="pre">is</span> <span class="pre">the</span> <span class="pre">capital</span> <span class="pre">of</span> <span class="pre">China?&quot;,</span> <span class="pre">&quot;Beijing.&quot;]</span></code>, and the resulting dataset will be in
+the following form:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Beijing.&quot;</span>
+        <span class="p">],</span>
+        <span class="s2">&quot;my_response&quot;</span><span class="p">:</span> <span class="s2">&quot;xxx&quot;</span>
+    <span class="p">},</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Paris.&quot;</span>
+        <span class="p">],</span>
+        <span class="s2">&quot;my_response&quot;</span><span class="p">:</span> <span class="s2">&quot;xxx&quot;</span>
+    <span class="p">}</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>However, this second example is <em>not recommended</em>.</p>
+</details>
+<p></p>
+
+<details>
+<summary><code>csv</code></summary>
+<p></p><p>The <code class="docutils literal notranslate"><span class="pre">csv</span></code> format needs to be specified by <code class="docutils literal notranslate"><span class="pre">fmt=&quot;csv&quot;</span></code>. As follows is a simple
+example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>instruction,output
+What is the capital of China?,Beijing.
+What is the capital of France?,Paris.
+</pre></div>
+</div>
+<p>The dataset will be loaded as a <a class="reference external" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame" title="(in pandas v2.1.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">pandas.DataFrame</span></code></a>, where each row will be
+considered as a data item, loaded as a <a class="reference external" href="https://pandas.pydata.org/docs/reference/api/pandas.Series.html#pandas.Series" title="(in pandas v2.1.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">pandas.Series</span></code></a>. The resulting dataset
+will be of the same format, which looks like the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>instruction,output,my_response
+What is the capital of China?,Beijing.,xxx
+What is the capital of France?,Paris.,xxx
+</pre></div>
+</div>
+<p>One other possible example in the <code class="docutils literal notranslate"><span class="pre">csv</span></code> format is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
+    <span class="p">[</span>
+        <span class="s2">&quot;What is the capital of China?&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Beijing.&quot;</span>
+    <span class="p">],</span>
+    <span class="p">[</span>
+        <span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Paris.&quot;</span>
+    <span class="p">]</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+</details>
+<p></p></section>
+<section id="defining-the-querying-function">
+<h2>Defining the Querying Function<a class="headerlink" href="#defining-the-querying-function" title="Permalink to this heading"></a></h2>
+<p>In addition to the original evaluation dataset <code class="docutils literal notranslate"><span class="pre">orig_dataset</span></code>, the saving location
+<code class="docutils literal notranslate"><span class="pre">dataset</span></code>, and the key/column name <code class="docutils literal notranslate"><span class="pre">response_name</span></code>,
+<a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator" title="ml3m.base.ResponseGenerator"><code class="xref py py-class docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator</span></code></a> further requires a parameter <code class="docutils literal notranslate"><span class="pre">query_func</span></code>, which
+should be a function that accepts a data item and returns the response of the model.</p>
+<p>The type of the data items can vary based on <code class="docutils literal notranslate"><span class="pre">fmt</span></code>, which has been specified in the
+previous subsection. Therefore, <code class="docutils literal notranslate"><span class="pre">query_func</span></code> must be corresponding to <code class="docutils literal notranslate"><span class="pre">fmt</span></code>. Its
+return value should be <em>only</em> a string representing the model response.</p>
+<p>There are a few important points worth noting:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">query_func</span></code> should not catch any exception that causes the data item to fail,
+otherwise the <a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator" title="ml3m.base.ResponseGenerator"><code class="xref py py-class docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator</span></code></a> will not be able to notice that
+the data item has failed (unless this is intentional).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">query_func</span></code> can be defined either as synchronous or as asynchounous. If it is
+defined as synchrounous, you must specify <code class="docutils literal notranslate"><span class="pre">n_workers=1</span></code>, and otherwise
+<code class="docutils literal notranslate"><span class="pre">n_workers&gt;1</span></code>. Defining an asynchronous <code class="docutils literal notranslate"><span class="pre">query_func</span></code> is useful when your model
+can be parallelized when performing inference, which can significantly improve the
+speed. If your model does not support parallelization, making it asynchounous will be
+meaningless.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">query_func</span></code> should not contain model initialization code but <em>only</em> model
+inference code, since <code class="docutils literal notranslate"><span class="pre">query_func</span></code> is executed in a loop.</p></li>
+</ul>
+</section>
+<section id="generating-the-responses">
+<h2>Generating the Responses<a class="headerlink" href="#generating-the-responses" title="Permalink to this heading"></a></h2>
+<p>Here is a code snippet using <a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator" title="ml3m.base.ResponseGenerator"><code class="xref py py-class docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator</span></code></a> to generate the model
+responses. It takes the first example in the <code class="docutils literal notranslate"><span class="pre">jsonl</span></code> format in
+<a class="reference internal" href="#dataset-format"><span class="std std-ref">this section</span></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">ml3m.base</span> <span class="kn">import</span> <span class="n">ResponseGenerator</span>
+<span class="kn">from</span> <span class="nn">transformers</span> <span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+<span class="kn">from</span> <span class="nn">transformers.generation.utils</span> <span class="kn">import</span> <span class="n">GenerationConfig</span>
+
+<span class="c1"># Obtain the dataset paths, assuming ``orig_dataset.jsonl`` is the original</span>
+<span class="c1"># evaluation dataset (existent) and ``dataset.jsonl`` is the desired saving</span>
+<span class="c1"># location (may or may not exist)</span>
+<span class="c1"># You should use your own (absolute) paths</span>
+
+<span class="n">dirname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span>
+<span class="n">orig_dataset</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirname</span><span class="p">,</span> <span class="s2">&quot;orig_dataset.jsonl&quot;</span><span class="p">)</span>
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirname</span><span class="p">,</span> <span class="s2">&quot;dataset.jsonl&quot;</span><span class="p">)</span>
+
+<span class="c1"># The initialization should be done in advance</span>
+<span class="c1"># You should use your own initialization code (if any)</span>
+
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;xxx&quot;</span><span class="p">,</span> <span class="n">use_fast</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                                          <span class="n">trust_remote_code</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;xxx&quot;</span><span class="p">,</span> <span class="n">device_map</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+                                             <span class="n">torch_dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float16</span><span class="p">,</span>
+                                             <span class="n">trust_remote_code</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Define the querying function (in this example, data_item is a dictionary)</span>
+<span class="c1"># You should define your own querying function based on your dataset structure and</span>
+<span class="c1"># use your own model inference code</span>
+
+<span class="k">def</span> <span class="nf">query_func</span><span class="p">(</span><span class="n">data_item</span><span class="p">):</span>
+    <span class="n">question</span> <span class="o">=</span> <span class="n">data_item</span><span class="p">[</span><span class="s2">&quot;instruction&quot;</span><span class="p">]</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">chat</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span>
+                          <span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">question</span><span class="p">}])</span>  <span class="c1"># Inference</span>
+    <span class="k">return</span> <span class="n">response</span>
+
+<span class="c1"># Create the generator and generate the responses</span>
+
+<span class="n">generator</span> <span class="o">=</span> <span class="n">ResponseGenerator</span><span class="p">(</span>
+    <span class="n">orig_dataset</span><span class="o">=</span><span class="n">orig_dataset</span><span class="p">,</span>
+    <span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
+    <span class="n">query_func</span><span class="o">=</span><span class="n">query_func</span><span class="p">,</span>
+    <span class="n">response_name</span><span class="o">=</span><span class="s2">&quot;my_response&quot;</span><span class="p">,</span>
+    <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;jsonl&quot;</span><span class="p">,</span>  <span class="c1"># default</span>
+    <span class="n">n_workers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>  <span class="c1"># default; query_func is synchronous</span>
+    <span class="n">logging_mode</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span>  <span class="c1"># default</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>  <span class="c1"># default</span>
+<span class="p">)</span>
+<span class="n">generator</span><span class="o">.</span><span class="n">generate</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The model <em>may</em> fail certain data items, and <a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator" title="ml3m.base.ResponseGenerator"><code class="xref py py-class docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator</span></code></a> takes
+this into account. <a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator.generate" title="ml3m.base.ResponseGenerator.generate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator.generate()</span></code></a> returns a boolean value
+to indicate whether any data item has errored out. Moreover, by default it will not
+regenerate responses for the data items that already have corresponding responses in
+the <code class="docutils literal notranslate"><span class="pre">dataset</span></code>. Therefore, it is safe to either execute this code multiple times, or
+do something like:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">max_iter</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">max_iter</span><span class="p">):</span>
+    <span class="n">completed</span> <span class="o">=</span> <span class="n">generator</span><span class="o">.</span><span class="n">generate</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">completed</span><span class="p">:</span>
+        <span class="k">break</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator.generate" title="ml3m.base.ResponseGenerator.generate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator.generate()</span></code></a> also provides a keyword parameter
+<code class="docutils literal notranslate"><span class="pre">overwrite</span></code> that ignores the existing responses in the <code class="docutils literal notranslate"><span class="pre">dataset</span></code>, and one should be
+careful setting it to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+</section>
+<section id="generating-the-responses-of-multiple-models">
+<h2>Generating the Responses of Multiple Models<a class="headerlink" href="#generating-the-responses-of-multiple-models" title="Permalink to this heading"></a></h2>
+<p>It is common that we need to compare the performances of multiple models. In this case,
+it would be nice to generate the responses of multiple models to <code class="docutils literal notranslate"><span class="pre">orig_dataset</span></code> to
+the same <code class="docutils literal notranslate"><span class="pre">dataset</span></code>. <a class="reference internal" href="../modules/ml3m.base.html#ml3m.base.ResponseGenerator" title="ml3m.base.ResponseGenerator"><code class="xref py py-class docutils literal notranslate"><span class="pre">ml3m.base.ResponseGenerator</span></code></a> serves this purpose simply
+by specifying different <code class="docutils literal notranslate"><span class="pre">response_name</span></code>. For instance:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+
+<span class="k">def</span> <span class="nf">query_func</span><span class="p">(</span><span class="n">data_item</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span><span class="p">):</span>
+    <span class="n">question</span> <span class="o">=</span> <span class="n">data_item</span><span class="p">[</span><span class="s2">&quot;instruction&quot;</span><span class="p">]</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">chat</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">question</span><span class="p">}])</span>
+    <span class="k">return</span> <span class="n">response</span>
+
+<span class="n">generators</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">ResponseGenerator</span><span class="p">(</span>
+        <span class="n">orig_dataset</span><span class="o">=</span><span class="n">orig_dataset</span><span class="p">,</span>
+        <span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
+        <span class="n">query_func</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">query_func</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">),</span>
+        <span class="n">response_name</span><span class="o">=</span><span class="s2">&quot;model1_response&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">model</span><span class="p">,</span> <span class="n">tokenizer</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">([</span><span class="n">model1</span><span class="p">,</span> <span class="n">model2</span><span class="p">],</span> <span class="p">[</span><span class="n">tokenizer1</span><span class="p">,</span> <span class="n">tokenizer2</span><span class="p">])</span>
+<span class="p">]</span>
+
+<span class="k">for</span> <span class="n">generator</span> <span class="ow">in</span> <span class="n">generators</span><span class="p">:</span>
+    <span class="n">generator</span><span class="o">.</span><span class="n">generate</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="evaluators.html" class="btn btn-neutral float-right" title="Evaluating Model Performance" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Yao Xiao.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

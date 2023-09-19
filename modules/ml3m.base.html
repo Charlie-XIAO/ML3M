@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ml3m.base: Base Classes &mdash; ml3m  documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ml3m.errors: Customized Exceptions" href="ml3m.errors.html" />
+    <link rel="prev" title="Evaluating Model Performance" href="../basics/evaluators.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            ml3m
+          </a>
+              <div class="version">
+                0.0.20
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../basics/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../basics/generators.html">Generating Model Responses</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../basics/evaluators.html">Evaluating Model Performance</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">ml3m.base</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#ml3m.base.BaseEvaluator"><code class="docutils literal notranslate"><span class="pre">BaseEvaluator</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseEvaluator._aget_score"><code class="docutils literal notranslate"><span class="pre">BaseEvaluator._aget_score()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseEvaluator._get_score"><code class="docutils literal notranslate"><span class="pre">BaseEvaluator._get_score()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseEvaluator.evaluate"><code class="docutils literal notranslate"><span class="pre">BaseEvaluator.evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseEvaluator.load_avg_score"><code class="docutils literal notranslate"><span class="pre">BaseEvaluator.load_avg_score()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseEvaluator.load_scores"><code class="docutils literal notranslate"><span class="pre">BaseEvaluator.load_scores()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator"><code class="docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator._extract_scores"><code class="docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator._extract_scores()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator._prompt"><code class="docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator._prompt()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator.evaluate"><code class="docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator.evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator.load_avg_score"><code class="docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator.load_avg_score()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator.load_scores"><code class="docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator.load_scores()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#ml3m.base.ResponseGenerator"><code class="docutils literal notranslate"><span class="pre">ResponseGenerator</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#ml3m.base.ResponseGenerator.generate"><code class="docutils literal notranslate"><span class="pre">ResponseGenerator.generate()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ml3m.errors.html">ml3m.errors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ml3m.mcq.html">ml3m.mcq</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ml3m.qa.html">ml3m.qa</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ml3m.utils.openai.html">ml3m.utils.openai</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">ml3m</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ml3m.base: Base Classes</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/modules/ml3m.base.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-ml3m.base">
+<span id="ml3m-base-base-classes"></span><h1>ml3m.base: Base Classes<a class="headerlink" href="#module-ml3m.base" title="Permalink to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="ml3m.base.BaseEvaluator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ml3m.base.</span></span><span class="sig-name descname"><span class="pre">BaseEvaluator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subjects</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DatasetFormat</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'jsonl'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iter</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">agg_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">AggregateMethod</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logging_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">LoggingMode</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'all'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseEvaluator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseEvaluator" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Base evaluator class.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This class is meant to be subclassed. The methods that must be overridden
+include:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#ml3m.base.BaseEvaluator._aget_score" title="ml3m.base.BaseEvaluator._aget_score"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseEvaluator._aget_score()</span></code></a> (if to be used with multiple workers)</p></li>
+<li><p><a class="reference internal" href="#ml3m.base.BaseEvaluator._get_score" title="ml3m.base.BaseEvaluator._get_score"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseEvaluator._get_score()</span></code></a> (if to be used with a single worker)</p></li>
+</ul>
+</div>
+<section id="parameters">
+<h2>Parameters<a class="headerlink" href="#parameters" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>dataset<span class="classifier">str or pathlib.Path</span></dt><dd><p>The absolute path to the evaluation dataset.</p>
+</dd>
+<dt>save_path<span class="classifier">str or pathlib.Path</span></dt><dd><p>The absolute path to the save location. This path may or may not exist, and if
+it exists, its file contents will be treated as a (partially) written result.
+Whether to overwrite the existing results or to build on them depend on
+<code class="docutils literal notranslate"><span class="pre">overwrite</span></code> when using the <a class="reference internal" href="#ml3m.base.BaseEvaluator.evaluate" title="ml3m.base.BaseEvaluator.evaluate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseEvaluator.evaluate()</span></code></a> method.</p>
+</dd>
+<dt>subjects<span class="classifier">list</span></dt><dd><p>The subjects to evaluate. This should <em>strictly</em> correspond to how to scores
+are obtained in <a class="reference internal" href="#ml3m.base.BaseEvaluator._aget_score" title="ml3m.base.BaseEvaluator._aget_score"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseEvaluator._aget_score()</span></code></a>. If the score is obtained as
+a single real value, <code class="docutils literal notranslate"><span class="pre">subjects</span></code> must be a list of one element and that
+element will be used as the name of that score. If the score(s) are obtained as
+a dictionary of subject-value pairs, all items in <code class="docutils literal notranslate"><span class="pre">subjects</span></code> must appear as
+the keys of the obtained dictionary. Any additional key will be discarded; any
+missing key will be treated as an error.</p>
+</dd>
+<dt>fmt<span class="classifier">{“jsonl”, “json”, “csv”}, default=”jsonl”</span></dt><dd><p>The format of <code class="docutils literal notranslate"><span class="pre">dataset</span></code>.</p>
+</dd>
+<dt>workers<span class="classifier">int or list of dict, default=1</span></dt><dd><p>If <code class="docutils literal notranslate"><span class="pre">workers</span></code> is an integer, it will be considered the number of workers. If
+specified only one worker, the dataset will be processed sequentially, and
+otherwise it will be asynchronously parallelized. If <code class="docutils literal notranslate"><span class="pre">workers</span></code> is a list of
+dictionaries, the length of this list will be considered the number of workers.
+Each dictionary should be the additional keyword arguments passed to
+<a class="reference internal" href="#ml3m.base.BaseEvaluator._aget_score" title="ml3m.base.BaseEvaluator._aget_score"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseEvaluator._aget_score()</span></code></a>. Note that if <code class="docutils literal notranslate"><span class="pre">workers</span></code> is an integer, no
+additional keyword arguments will be passed.</p>
+</dd>
+<dt>n_iter<span class="classifier">int, default=1</span></dt><dd><p>The number of iterations for each data item. This is commonly used when one
+round of scoring is not convincing enough and the final scoring should be some
+statistics of multiple rounds of scoring.</p>
+</dd>
+<dt>agg_method<span class="classifier">{“mean”, “sum”, “min”, “max”, “mode”}, default=None</span></dt><dd><p>The aggregate method to use on multiple rounds of scoring. Ignored when
+<code class="docutils literal notranslate"><span class="pre">n_iter=1</span></code>, and otherwise this must not be <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd>
+<dt>logging_mode<span class="classifier">{“all”, “failed”, “none”}, default=”all”</span></dt><dd><p>The logging mode, whether to save the logs of all items, or only of failed
+items, or save no log.</p>
+</dd>
+<dt>verbose<span class="classifier">int, default=0</span></dt><dd><p>The verbosity level of the processing. For negative levels, only a progress bar
+will be displayed. For level 0, the errored items will also be displayed. For
+positive levels, the all items will be displayed, and the verbosity level
+determines the number of lines to display for the message of each item.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseEvaluator._aget_score">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_aget_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_item</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataItemType</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Real</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Real</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseEvaluator._aget_score"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseEvaluator._aget_score" title="Permalink to this definition"></a></dt>
+<dd><p>Evaluate a data item and obtain its score(s).</p>
+<dl class="field-list simple">
+</dl>
+<p>This should be the asynchronous version of <a class="reference internal" href="#ml3m.base.BaseEvaluator._get_score" title="ml3m.base.BaseEvaluator._get_score"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseEvaluator._get_score()</span></code></a>.
+See <a class="reference internal" href="#ml3m.base.BaseEvaluator._get_score" title="ml3m.base.BaseEvaluator._get_score"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseEvaluator._get_score()</span></code></a> for details. If the obtaining process of
+the scores does not involving anything asynchrounous, this can simply be
+overridden as follows:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span> <span class="nf">_aget_score</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_item</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_score</span><span class="p">(</span><span class="n">data_item</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>However, note that this will cause only one worker to be actually doing all
+the tasks because it will not give away the control of the event loop.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method is not implemented and must be overridden in subclasses.
+Moreover, this method must be defined as asynchronous.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseEvaluator._get_score">
+<span class="sig-name descname"><span class="pre">_get_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_item</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataItemType</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Real</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Real</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseEvaluator._get_score"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseEvaluator._get_score" title="Permalink to this definition"></a></dt>
+<dd><p>Evaluate a data item and obtain its score(s).</p>
+<dl class="field-list simple">
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method is not implemented and must be overridden in subclasses.</p>
+</div>
+<section id="id1">
+<h3>Parameters<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>data_item<span class="classifier">DataItemType</span></dt><dd><p>The data item.</p>
+</dd>
+<dt>kwargs</dt><dd><p>The additional keyword arguments.</p>
+</dd>
+</dl>
+</section>
+<section id="returns">
+<h3>Returns<a class="headerlink" href="#returns" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>scores<span class="classifier">real or dict</span></dt><dd><p>The evaluated scores, either a single score or a dictionary of subject-
+score pairs.</p>
+</dd>
+</dl>
+</section>
+<section id="notes">
+<h3>Notes<a class="headerlink" href="#notes" title="Permalink to this heading"></a></h3>
+<p>Note that if there are mutliple scores obtained, i.e., returning a dictionary,
+remember that the “i” key cannot be included since it is reserved for indexing.</p>
+<p>Moreover, it is recommended <em>not</em> to catch the exceptions that cause the
+processing of a data item to fail, since otherwise
+<a class="reference internal" href="#ml3m.base.BaseEvaluator.evaluate" title="ml3m.base.BaseEvaluator.evaluate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseEvaluator.evaluate()</span></code></a> will not realize that the data item errors out.</p>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseEvaluator.evaluate">
+<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseEvaluator.evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseEvaluator.evaluate" title="Permalink to this definition"></a></dt>
+<dd><p>Evaluate the specified dataset.</p>
+<section id="id2">
+<h3>Parameters<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>overwrite<span class="classifier">bool, default=False</span></dt><dd><p>Whether to overwrite the data in <code class="docutils literal notranslate"><span class="pre">save_path</span></code>. If <code class="docutils literal notranslate"><span class="pre">False</span></code>, the
+evaluation will be built upon existing data in <code class="docutils literal notranslate"><span class="pre">save_path</span></code>, otherwise
+all data will be evaluated are existing data will be overwritten.</p>
+</dd>
+</dl>
+</section>
+<section id="id3">
+<h3>Returns<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>completed<span class="classifier">bool</span></dt><dd><p>Whether the task has been completed.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseEvaluator.load_avg_score">
+<span class="sig-name descname"><span class="pre">load_avg_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">subject_subset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">items</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/numbers.html#numbers.Real" title="(in Python v3.11)"><span class="pre">numbers.Real</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseEvaluator.load_avg_score"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseEvaluator.load_avg_score" title="Permalink to this definition"></a></dt>
+<dd><p>Load the average score of each subject from the save location.</p>
+<section id="id4">
+<h3>Parameters<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>subject_subset<span class="classifier">list or None</span></dt><dd><p>The subjects of the scores to select, i.e., the columns. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+select all subjects.</p>
+</dd>
+<dt>items<span class="classifier">list or None</span></dt><dd><p>The indices of the items to select. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, select all items. This
+will be applied after <code class="docutils literal notranslate"><span class="pre">subject_subset</span></code>. This does not necessarily need
+to be a subset of the index of the loaded <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>. However,
+any item out of range would not be taken into account when computing the
+average score.</p>
+</dd>
+</dl>
+</section>
+<section id="id5">
+<h3>Returns<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>avg_score<span class="classifier">pandas.DataFrame</span></dt><dd><p>The average score loaded from <code class="docutils literal notranslate"><span class="pre">save_path</span></code>.</p>
+</dd>
+</dl>
+</section>
+<section id="examples">
+<h3>Examples<a class="headerlink" href="#examples" title="Permalink to this heading"></a></h3>
+<p>Suppose that the file at <code class="docutils literal notranslate"><span class="pre">save_path</span></code> looks like the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">i</span><span class="p">,</span><span class="n">score1</span><span class="p">,</span><span class="n">score2</span>
+<span class="mi">0</span><span class="p">,</span><span class="mi">78</span><span class="p">,</span><span class="mi">83</span>
+<span class="mi">1</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">76</span>
+<span class="mi">2</span><span class="p">,</span><span class="mi">100</span><span class="p">,</span><span class="mi">92</span>
+<span class="mi">3</span><span class="p">,</span><span class="mi">28</span><span class="p">,</span><span class="mi">38</span>
+<span class="mi">4</span><span class="p">,</span><span class="mi">30</span><span class="p">,</span><span class="mi">45</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_avg_score</span><span class="p">()</span>  
+<span class="go">{&#39;score1&#39;: 60.0, &#39;score2&#39;: 66.8}</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_avg_score</span><span class="p">(</span><span class="n">subject_subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;score2&quot;</span><span class="p">])</span>  
+<span class="go">{&#39;score2&#39;: 66.8}</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_avg_score</span><span class="p">(</span><span class="n">items</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">)))</span>  
+<span class="go">{&#39;score1&#39;: 60.0, &#39;score2&#39;: 66.8}</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseEvaluator.load_scores">
+<span class="sig-name descname"><span class="pre">load_scores</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">subject_subset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">items</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame" title="(in pandas v2.1.0)"><span class="pre">DataFrame</span></a></span></span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseEvaluator.load_scores"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseEvaluator.load_scores" title="Permalink to this definition"></a></dt>
+<dd><p>Load the scores from the save location.</p>
+<section id="id6">
+<h3>Parameters<a class="headerlink" href="#id6" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>subject_subset<span class="classifier">list or None</span></dt><dd><p>The subjects of the scores to select, i.e., the columns. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+select all subjects. In the returned <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>, the columns
+will be in the same order as <code class="docutils literal notranslate"><span class="pre">subject_subset</span></code>.</p>
+</dd>
+<dt>items<span class="classifier">list or None</span></dt><dd><p>The indices of the items to select. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, select all items. This
+will be applied after <code class="docutils literal notranslate"><span class="pre">subject_subset</span></code>. This does not necessarily need
+to be a subset of the index of the loaded <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>. The
+indices that do not exist in the index of the loaded <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>
+will be assigned <code class="docutils literal notranslate"><span class="pre">NaN</span></code>. In the returned <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>, the rows
+will be in the same order as <code class="docutils literal notranslate"><span class="pre">items</span></code>.</p>
+</dd>
+</dl>
+</section>
+<section id="id7">
+<h3>Returns<a class="headerlink" href="#id7" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>scores<span class="classifier">pandas.DataFrame</span></dt><dd><p>The scores loaded from <code class="docutils literal notranslate"><span class="pre">save_path</span></code>.</p>
+</dd>
+</dl>
+</section>
+<section id="id8">
+<h3>Examples<a class="headerlink" href="#id8" title="Permalink to this heading"></a></h3>
+<p>Suppose that the file at <code class="docutils literal notranslate"><span class="pre">save_path</span></code> looks like the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">i</span><span class="p">,</span><span class="n">score1</span><span class="p">,</span><span class="n">score2</span>
+<span class="mi">0</span><span class="p">,</span><span class="mi">78</span><span class="p">,</span><span class="mi">83</span>
+<span class="mi">1</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">76</span>
+<span class="mi">3</span><span class="p">,</span><span class="mi">100</span><span class="p">,</span><span class="mi">92</span>
+<span class="mi">4</span><span class="p">,</span><span class="mi">28</span><span class="p">,</span><span class="mi">38</span>
+<span class="mi">5</span><span class="p">,</span><span class="mi">30</span><span class="p">,</span><span class="mi">45</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_scores</span><span class="p">()</span>  
+<span class="go">   score1  score2</span>
+<span class="go">i</span>
+<span class="go">0      78      83</span>
+<span class="go">1      64      76</span>
+<span class="go">3     100      92</span>
+<span class="go">4      28      38</span>
+<span class="go">5      30      45</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_scores</span><span class="p">(</span><span class="n">subject_subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;score2&quot;</span><span class="p">])</span>  
+<span class="go">   score2</span>
+<span class="go">i</span>
+<span class="go">0      83</span>
+<span class="go">1      76</span>
+<span class="go">3      92</span>
+<span class="go">4      38</span>
+<span class="go">5      45</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_scores</span><span class="p">(</span><span class="n">items</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">)))</span>  
+<span class="go">   score1  score2</span>
+<span class="go">i</span>
+<span class="go">0    78.0    83.0</span>
+<span class="go">1    64.0    76.0</span>
+<span class="go">2     NaN     NaN</span>
+<span class="go">3   100.0    92.0</span>
+<span class="go">4    28.0    38.0</span>
+<span class="go">5    30.0    45.0</span>
+<span class="go">6     NaN     NaN</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ml3m.base.BaseOpenAIEvaluator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ml3m.base.</span></span><span class="sig-name descname"><span class="pre">BaseOpenAIEvaluator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subjects</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">openai_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DatasetFormat</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'jsonl'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iter</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">agg_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">AggregateMethod</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.11)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'gpt-3.5-turbo'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logging_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">LoggingMode</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'all'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">openai_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseOpenAIEvaluator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseOpenAIEvaluator" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#ml3m.base.BaseEvaluator" title="ml3m.base.eval.BaseEvaluator"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseEvaluator</span></code></a></p>
+<p>Base evaluator class via OpenAI.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This class is meant to be subclassed. The methods that must be overriden
+include:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator._prompt" title="ml3m.base.BaseOpenAIEvaluator._prompt"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator._prompt()</span></code></a></p></li>
+<li><p><a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator._extract_scores" title="ml3m.base.BaseOpenAIEvaluator._extract_scores"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator._extract_scores()</span></code></a></p></li>
+</ul>
+</div>
+<section id="id9">
+<h2>Parameters<a class="headerlink" href="#id9" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>dataset<span class="classifier">str or pathlib.Path</span></dt><dd><p>The absolute path to the evaluation dataset.</p>
+</dd>
+<dt>save_path<span class="classifier">str or pathlib.Path</span></dt><dd><p>The absolute path to the save location. This path may or may not exist, and if
+it exists, its file contents will be treated as a (partially) written result.
+Whether to overwrite the existing results or to build on them depend on
+<code class="docutils literal notranslate"><span class="pre">overwrite</span></code> when using the <a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator.evaluate" title="ml3m.base.BaseOpenAIEvaluator.evaluate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator.evaluate()</span></code></a> method.</p>
+</dd>
+<dt>subjects<span class="classifier">list</span></dt><dd><p>The subjects to evaluate. This should <em>strictly</em> correspond to how to scores
+are obtained in <a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator._extract_scores" title="ml3m.base.BaseOpenAIEvaluator._extract_scores"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator._extract_scores()</span></code></a>. If the score is
+obtained as a single real value, <code class="docutils literal notranslate"><span class="pre">subjects</span></code> must be a list of one element and
+that element will be used as the name of that score. If the score(s) are
+obtained as a dictionary of subject-value pairs, all items in <code class="docutils literal notranslate"><span class="pre">subjects</span></code> must
+appear as the keys of the obtained dictionary. Any additional key will be
+discarded; any missing key will be treated as an error.</p>
+</dd>
+<dt>openai_config<span class="classifier">str or pathlib.Path</span></dt><dd><p>The absolute path to the OpenAI configuration file.</p>
+</dd>
+<dt>fmt<span class="classifier">{“jsonl”, “json”, “csv”}, default=”jsonl”</span></dt><dd><p>The format of <code class="docutils literal notranslate"><span class="pre">dataset</span></code>.</p>
+</dd>
+<dt>n_iter<span class="classifier">int, default=1</span></dt><dd><p>The number of iterations for each data item. This is commonly used when one
+round of scoring is not convincing enough and the final scoring should be some
+statistics of multiple rounds of scoring.</p>
+</dd>
+<dt>agg_method<span class="classifier">{“mean”, “sum”, “min”, “max”, “mode”}, default=None</span></dt><dd><p>The aggregate method to use on multiple rounds of scoring. Ignored when
+<code class="docutils literal notranslate"><span class="pre">n_iter=1</span></code>, and otherwise this must not be <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd>
+<dt>timeout<span class="classifier">float, default=60</span></dt><dd><p>The timeout in seconds. This is not the OpenAI timeout, but the timeout for
+cancelling the worker tasks.</p>
+</dd>
+<dt>model<span class="classifier">str, default=”gpt-3.5-turbo”</span></dt><dd><p>The ID of the model to use, must be one of the available OpenAI models that
+support the ChatCompletion API. See also
+<a class="reference external" href="https://platform.openai.com/docs/models/model-endpoint-compatibility">https://platform.openai.com/docs/models/model-endpoint-compatibility</a>.</p>
+</dd>
+<dt>logging_mode<span class="classifier">{“all”, “failed”, “none”}, default=”all”</span></dt><dd><p>The logging mode, whether to save the logs of all items, or only of failed
+items, or save no log.</p>
+</dd>
+<dt>verbose<span class="classifier">int, default=0</span></dt><dd><p>The verbosity level of the processing. For negative levels, only a progress bar
+will be displayed. For level 0, the errored items will also be displayed. For
+positive levels, the all items will be displayed, and the verbosity level
+determines the number of lines to display for the message of each item.</p>
+</dd>
+<dt>openai_kwargs</dt><dd><p>The additional keyword arguments to pass to OpenAI ChatCompletion. See the
+arguments marked as <em>Optional</em> at
+<a class="reference external" href="https://platform.openai.com/docs/api-reference/chat/create">https://platform.openai.com/docs/api-reference/chat/create</a>. Do not try to pass
+<code class="docutils literal notranslate"><span class="pre">api_key</span></code> and <code class="docutils literal notranslate"><span class="pre">api_base</span></code> through <code class="docutils literal notranslate"><span class="pre">openai_kwargs</span></code>, use a configuration
+file instead.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseOpenAIEvaluator._extract_scores">
+<span class="sig-name descname"><span class="pre">_extract_scores</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_item</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataItemType</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Real</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Real</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseOpenAIEvaluator._extract_scores"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseOpenAIEvaluator._extract_scores" title="Permalink to this definition"></a></dt>
+<dd><p>Extract the score(s) from the OpenAI model reply (and the data item).</p>
+<dl class="field-list simple">
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method is not implemented and must be overridden in subclasses.</p>
+</div>
+<section id="id10">
+<h3>Parameters<a class="headerlink" href="#id10" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>reply<span class="classifier">str</span></dt><dd><p>The OpenAI model reply, from which the score(s) will be extracted.</p>
+</dd>
+<dt>data_item<span class="classifier">DataItemType</span></dt><dd><p>The data item. This may not be used, but in case the OpenAI model reply
+requires comparion with the data item to give the final score, the data
+item is passed in as well.</p>
+</dd>
+</dl>
+</section>
+<section id="id11">
+<h3>Returns<a class="headerlink" href="#id11" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>scores<span class="classifier">real or dict</span></dt><dd><p>The extracted scores, either a single score or a dictionary of subject-
+score pairs.</p>
+</dd>
+</dl>
+</section>
+<section id="id12">
+<h3>Notes<a class="headerlink" href="#id12" title="Permalink to this heading"></a></h3>
+<p>This method should correspond to the <a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator._prompt" title="ml3m.base.BaseOpenAIEvaluator._prompt"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator._prompt()</span></code></a>
+method, in the sense that the formatted evaluation prompt is expected to invoke
+an <em>extractable</em> model reply, and this method should extract the score(s) from
+that reply. It can extract either a single score or a dictionary of subject-
+score pairs.</p>
+<p>Note that if there are mutliple scores obtained, i.e., returning a dictionary,
+remember that the “i” key cannot be included since it is reserved for indexing.</p>
+<p>It is recommended <em>not</em> to catch the exceptions that cause the extraction of
+scores to fail, since otherwise <a class="reference internal" href="#ml3m.base.BaseOpenAIEvaluator.evaluate" title="ml3m.base.BaseOpenAIEvaluator.evaluate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BaseOpenAIEvaluator.evaluate()</span></code></a> will not
+realize that the data item errors out.</p>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseOpenAIEvaluator._prompt">
+<span class="sig-name descname"><span class="pre">_prompt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_item</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataItemType</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.11)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/ml3m/base/eval.html#BaseOpenAIEvaluator._prompt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.BaseOpenAIEvaluator._prompt" title="Permalink to this definition"></a></dt>
+<dd><p>Return the prompt for evaluation.</p>
+<dl class="field-list simple">
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method is not implemented and must be overridden in subclasses.</p>
+</div>
+<section id="id13">
+<h3>Parameters<a class="headerlink" href="#id13" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>data_item<span class="classifier">DataItemType</span></dt><dd><p>The data item.</p>
+</dd>
+</dl>
+</section>
+<section id="id14">
+<h3>Returns<a class="headerlink" href="#id14" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>sys_msg<span class="classifier">str</span></dt><dd><p>The system message for setting the role of the OpenAI model when querying
+for evaluation, e.g. a professional teacher in some field. If no system
+message is needed, this should be an empty string. See also
+<a class="reference external" href="https://platform.openai.com/docs/guides/gpt/chat-completions-api">https://platform.openai.com/docs/guides/gpt/chat-completions-api</a>
+for an example of system message.</p>
+</dd>
+<dt>eval_prompt<span class="classifier">str</span></dt><dd><p>The formatted evaluation prompt.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseOpenAIEvaluator.evaluate">
+<span class="sig-name descname"><span class="pre">evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></span><a class="headerlink" href="#ml3m.base.BaseOpenAIEvaluator.evaluate" title="Permalink to this definition"></a></dt>
+<dd><p>Evaluate the specified dataset.</p>
+<section id="id15">
+<h3>Parameters<a class="headerlink" href="#id15" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>overwrite<span class="classifier">bool, default=False</span></dt><dd><p>Whether to overwrite the data in <code class="docutils literal notranslate"><span class="pre">save_path</span></code>. If <code class="docutils literal notranslate"><span class="pre">False</span></code>, the
+evaluation will be built upon existing data in <code class="docutils literal notranslate"><span class="pre">save_path</span></code>, otherwise
+all data will be evaluated are existing data will be overwritten.</p>
+</dd>
+</dl>
+</section>
+<section id="id16">
+<h3>Returns<a class="headerlink" href="#id16" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>completed<span class="classifier">bool</span></dt><dd><p>Whether the task has been completed.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseOpenAIEvaluator.load_avg_score">
+<span class="sig-name descname"><span class="pre">load_avg_score</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">subject_subset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">items</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.11)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/numbers.html#numbers.Real" title="(in Python v3.11)"><span class="pre">numbers.Real</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#ml3m.base.BaseOpenAIEvaluator.load_avg_score" title="Permalink to this definition"></a></dt>
+<dd><p>Load the average score of each subject from the save location.</p>
+<section id="id17">
+<h3>Parameters<a class="headerlink" href="#id17" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>subject_subset<span class="classifier">list or None</span></dt><dd><p>The subjects of the scores to select, i.e., the columns. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+select all subjects.</p>
+</dd>
+<dt>items<span class="classifier">list or None</span></dt><dd><p>The indices of the items to select. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, select all items. This
+will be applied after <code class="docutils literal notranslate"><span class="pre">subject_subset</span></code>. This does not necessarily need
+to be a subset of the index of the loaded <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>. However,
+any item out of range would not be taken into account when computing the
+average score.</p>
+</dd>
+</dl>
+</section>
+<section id="id18">
+<h3>Returns<a class="headerlink" href="#id18" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>avg_score<span class="classifier">pandas.DataFrame</span></dt><dd><p>The average score loaded from <code class="docutils literal notranslate"><span class="pre">save_path</span></code>.</p>
+</dd>
+</dl>
+</section>
+<section id="id19">
+<h3>Examples<a class="headerlink" href="#id19" title="Permalink to this heading"></a></h3>
+<p>Suppose that the file at <code class="docutils literal notranslate"><span class="pre">save_path</span></code> looks like the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">i</span><span class="p">,</span><span class="n">score1</span><span class="p">,</span><span class="n">score2</span>
+<span class="mi">0</span><span class="p">,</span><span class="mi">78</span><span class="p">,</span><span class="mi">83</span>
+<span class="mi">1</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">76</span>
+<span class="mi">2</span><span class="p">,</span><span class="mi">100</span><span class="p">,</span><span class="mi">92</span>
+<span class="mi">3</span><span class="p">,</span><span class="mi">28</span><span class="p">,</span><span class="mi">38</span>
+<span class="mi">4</span><span class="p">,</span><span class="mi">30</span><span class="p">,</span><span class="mi">45</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_avg_score</span><span class="p">()</span>  
+<span class="go">{&#39;score1&#39;: 60.0, &#39;score2&#39;: 66.8}</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_avg_score</span><span class="p">(</span><span class="n">subject_subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;score2&quot;</span><span class="p">])</span>  
+<span class="go">{&#39;score2&#39;: 66.8}</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_avg_score</span><span class="p">(</span><span class="n">items</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">)))</span>  
+<span class="go">{&#39;score1&#39;: 60.0, &#39;score2&#39;: 66.8}</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.BaseOpenAIEvaluator.load_scores">
+<span class="sig-name descname"><span class="pre">load_scores</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">subject_subset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">items</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.11)"><span class="pre">list</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.11)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html#pandas.DataFrame" title="(in pandas v2.1.0)"><span class="pre">DataFrame</span></a></span></span><a class="headerlink" href="#ml3m.base.BaseOpenAIEvaluator.load_scores" title="Permalink to this definition"></a></dt>
+<dd><p>Load the scores from the save location.</p>
+<section id="id20">
+<h3>Parameters<a class="headerlink" href="#id20" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>subject_subset<span class="classifier">list or None</span></dt><dd><p>The subjects of the scores to select, i.e., the columns. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+select all subjects. In the returned <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>, the columns
+will be in the same order as <code class="docutils literal notranslate"><span class="pre">subject_subset</span></code>.</p>
+</dd>
+<dt>items<span class="classifier">list or None</span></dt><dd><p>The indices of the items to select. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, select all items. This
+will be applied after <code class="docutils literal notranslate"><span class="pre">subject_subset</span></code>. This does not necessarily need
+to be a subset of the index of the loaded <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>. The
+indices that do not exist in the index of the loaded <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>
+will be assigned <code class="docutils literal notranslate"><span class="pre">NaN</span></code>. In the returned <code class="xref py py-class docutils literal notranslate"><span class="pre">pd.DataFrame</span></code>, the rows
+will be in the same order as <code class="docutils literal notranslate"><span class="pre">items</span></code>.</p>
+</dd>
+</dl>
+</section>
+<section id="id21">
+<h3>Returns<a class="headerlink" href="#id21" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>scores<span class="classifier">pandas.DataFrame</span></dt><dd><p>The scores loaded from <code class="docutils literal notranslate"><span class="pre">save_path</span></code>.</p>
+</dd>
+</dl>
+</section>
+<section id="id22">
+<h3>Examples<a class="headerlink" href="#id22" title="Permalink to this heading"></a></h3>
+<p>Suppose that the file at <code class="docutils literal notranslate"><span class="pre">save_path</span></code> looks like the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">i</span><span class="p">,</span><span class="n">score1</span><span class="p">,</span><span class="n">score2</span>
+<span class="mi">0</span><span class="p">,</span><span class="mi">78</span><span class="p">,</span><span class="mi">83</span>
+<span class="mi">1</span><span class="p">,</span><span class="mi">64</span><span class="p">,</span><span class="mi">76</span>
+<span class="mi">3</span><span class="p">,</span><span class="mi">100</span><span class="p">,</span><span class="mi">92</span>
+<span class="mi">4</span><span class="p">,</span><span class="mi">28</span><span class="p">,</span><span class="mi">38</span>
+<span class="mi">5</span><span class="p">,</span><span class="mi">30</span><span class="p">,</span><span class="mi">45</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_scores</span><span class="p">()</span>  
+<span class="go">   score1  score2</span>
+<span class="go">i</span>
+<span class="go">0      78      83</span>
+<span class="go">1      64      76</span>
+<span class="go">3     100      92</span>
+<span class="go">4      28      38</span>
+<span class="go">5      30      45</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_scores</span><span class="p">(</span><span class="n">subject_subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;score2&quot;</span><span class="p">])</span>  
+<span class="go">   score2</span>
+<span class="go">i</span>
+<span class="go">0      83</span>
+<span class="go">1      76</span>
+<span class="go">3      92</span>
+<span class="go">4      38</span>
+<span class="go">5      45</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">evaluator</span><span class="o">.</span><span class="n">load_scores</span><span class="p">(</span><span class="n">items</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">)))</span>  
+<span class="go">   score1  score2</span>
+<span class="go">i</span>
+<span class="go">0    78.0    83.0</span>
+<span class="go">1    64.0    76.0</span>
+<span class="go">2     NaN     NaN</span>
+<span class="go">3   100.0    92.0</span>
+<span class="go">4    28.0    38.0</span>
+<span class="go">5    30.0    45.0</span>
+<span class="go">6     NaN     NaN</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ml3m.base.ResponseGenerator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ml3m.base.</span></span><span class="sig-name descname"><span class="pre">ResponseGenerator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">orig_dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">info_func</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">DataItemType</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_func</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.11)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DatasetFormat</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'jsonl'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logging_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">LoggingMode</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'all'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.11)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/ml3m/base/generate.html#ResponseGenerator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.ResponseGenerator" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.11)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Generate responses and combine with the original dataset.</p>
+<section id="id23">
+<h2>Parameters<a class="headerlink" href="#id23" title="Permalink to this heading"></a></h2>
+<dl class="simple">
+<dt>orig_dataset<span class="classifier">str or pathlib.Path</span></dt><dd><p>The absolute path to the original dataset.</p>
+</dd>
+<dt>dataset<span class="classifier">str or pathlib.Path</span></dt><dd><p>The absolute path to the result dataset. All information in the original
+dataset will be preserved while the responses will be appended.</p>
+</dd>
+<dt>info_func<span class="classifier">Callable</span></dt><dd><p>The function that takes a data item and forms the query. The data item can be a
+<a class="reference external" href="https://pandas.pydata.org/docs/reference/api/pandas.Series.html#pandas.Series" title="(in pandas v2.1.0)"><code class="xref py py-class docutils literal notranslate"><span class="pre">pandas.Series</span></code></a>, a list, or a dictionary, depending on <code class="docutils literal notranslate"><span class="pre">format</span></code>.
+Whatever it returns will be passed as the input to <code class="docutils literal notranslate"><span class="pre">query_func</span></code> and printed
+to console for high verbosity levels.</p>
+</dd>
+<dt>query_func<span class="classifier">Callable</span></dt><dd><p>The function that takes the query returned by <code class="docutils literal notranslate"><span class="pre">info_func</span></code> and outputs the
+model response represented as a single string. This function should be
+synchronous if <code class="docutils literal notranslate"><span class="pre">n_workers=1</span></code> and asynchronous otherwise.</p>
+</dd>
+<dt>response_name<span class="classifier">str</span></dt><dd><p>The key or column name to use for the response. This should <em>not</em> be a key or
+column name that already exists in the dataset. Be extremely careful since
+there will be <em>no</em> warning or exception raised on this.</p>
+</dd>
+<dt>fmt<span class="classifier">{“jsonl”, “json”, “csv”}, default=”jsonl”</span></dt><dd><p>The format of <code class="docutils literal notranslate"><span class="pre">dataset</span></code>.</p>
+</dd>
+<dt>n_workers<span class="classifier">int, default=1</span></dt><dd><p>The number of workers. If only one worker, the dataset will be processed
+sequentially. Otherwise it will be asynchronously parallelized with the
+specified number of workers.</p>
+</dd>
+<dt>logging_mode<span class="classifier">{“all”, “failed”, “none”}, default=”all”</span></dt><dd><p>The logging mode, whether to save the logs of all items, or only of failed
+items, or save no log.</p>
+</dd>
+<dt>verbose<span class="classifier">int, default=0</span></dt><dd><p>The verbosity level of the processing. For negative levels, only a progress bar
+will be displayed. For level 0, the errored items will also be displayed. For
+positive levels, the all items will be displayed, and the verbosity level
+determines the number of lines to display for the message of each item.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="ml3m.base.ResponseGenerator.generate">
+<span class="sig-name descname"><span class="pre">generate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.11)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../_modules/ml3m/base/generate.html#ResponseGenerator.generate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ml3m.base.ResponseGenerator.generate" title="Permalink to this definition"></a></dt>
+<dd><p>Generate responses and combine with the original dataset.</p>
+<section id="id24">
+<h3>Parameters<a class="headerlink" href="#id24" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>overwrite<span class="classifier">bool, default=False</span></dt><dd><p>Whether to overwrite the responses if some already exist, specified by
+<code class="docutils literal notranslate"><span class="pre">response_name</span></code>.</p>
+</dd>
+</dl>
+</section>
+<section id="id25">
+<h3>Returns<a class="headerlink" href="#id25" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>completed<span class="classifier">bool</span></dt><dd><p>Whether the task has been completed.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../basics/evaluators.html" class="btn btn-neutral float-left" title="Evaluating Model Performance" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="ml3m.errors.html" class="btn btn-neutral float-right" title="ml3m.errors: Customized Exceptions" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Yao Xiao.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

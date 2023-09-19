@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ml3m.qa.eval &mdash; ml3m  documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            ml3m
+          </a>
+              <div class="version">
+                0.0.20
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../basics/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../basics/generators.html">Generating Model Responses</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../basics/evaluators.html">Evaluating Model Performance</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/ml3m.base.html">ml3m.base</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/ml3m.errors.html">ml3m.errors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/ml3m.mcq.html">ml3m.mcq</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/ml3m.qa.html">ml3m.qa</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/ml3m.utils.openai.html">ml3m.utils.openai</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">ml3m</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ml3m.qa.eval</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ml3m.qa.eval</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span>
+
+<span class="kn">from</span> <span class="nn">.._metrics</span> <span class="kn">import</span> <span class="n">bleu</span>
+<span class="kn">from</span> <span class="nn">..base.eval</span> <span class="kn">import</span> <span class="n">BaseEvaluator</span><span class="p">,</span> <span class="n">BaseOpenAIEvaluator</span>
+<span class="kn">from</span> <span class="nn">..errors</span> <span class="kn">import</span> <span class="n">InvalidParameterError</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">numbers</span> <span class="kn">import</span> <span class="n">Real</span>
+    <span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+    <span class="kn">from</span> <span class="nn">.._typing</span> <span class="kn">import</span> <span class="n">DataItemType</span><span class="p">,</span> <span class="n">DatasetFormat</span><span class="p">,</span> <span class="n">LoggingMode</span>
+
+
+<div class="viewcode-block" id="QaOpenAIEvaluator"><a class="viewcode-back" href="../../../modules/ml3m.qa.html#ml3m.qa.QaOpenAIEvaluator">[docs]</a><span class="k">class</span> <span class="nc">QaOpenAIEvaluator</span><span class="p">(</span><span class="n">BaseOpenAIEvaluator</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Evaluator for question-answering via OpenAI.</span>
+
+<span class="sd">    This evaluator utilizes the ability of OpenAI models to tell the quality of a</span>
+<span class="sd">    response from the following aspects:</span>
+
+<span class="sd">    - **Accuracy**: Using the reference answer as the ground truth, does the response</span>
+<span class="sd">      include factually incorrect information?</span>
+<span class="sd">    - **Completeness**: Compared with the reference answer, is the response missing</span>
+<span class="sd">      details?</span>
+<span class="sd">    - **Clarity**: Is the response well-organized and clearly presented? If accuracy</span>
+<span class="sd">      and completeness is poor, clarity should also be considered poor.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dataset : str or pathlib.Path</span>
+<span class="sd">        The absolute path to the evaluation dataset.</span>
+<span class="sd">    save_path : str or pathlib.Path</span>
+<span class="sd">        The absolute path to the save location. This path may or may not exist, and if</span>
+<span class="sd">        it exists, its file contents will be treated as a (partially) written result.</span>
+<span class="sd">        Whether to overwrite the existing results or to build on them depend on</span>
+<span class="sd">        ``overwrite`` when using the :meth:`QaOpenAIEvaluator.evaluate` method.</span>
+<span class="sd">    openai_config : str or pathlib.Path</span>
+<span class="sd">        The absolute path to the OpenAI configuration file.</span>
+<span class="sd">    info_func : Callable</span>
+<span class="sd">        The function that extracts the question, actual answer, and expected answer of</span>
+<span class="sd">        a data item. The input parameter should be a :class:`pandas.Series`, a list, or</span>
+<span class="sd">        a dictionary, depending on ``fmt`` and the specific type of each data item. The</span>
+<span class="sd">        output should be a tuple of three strings, respectively the question, the actual</span>
+<span class="sd">        answer to that question, and the expected answer of that question. See the notes</span>
+<span class="sd">        for examples.</span>
+<span class="sd">    fmt : {&quot;jsonl&quot;, &quot;json&quot;, &quot;csv&quot;}, default=&quot;jsonl&quot;</span>
+<span class="sd">        The format of ``dataset``.</span>
+<span class="sd">    domain : str, optional</span>
+<span class="sd">        The domain of knowledge. ChatGPT will be prompted to know that your question,</span>
+<span class="sd">        answer, and reference answer are &quot;in {domain}&quot;. If ``None``, then this</span>
+<span class="sd">        information will not be given to ChatGPT.</span>
+<span class="sd">    aspects : list of str, optional</span>
+<span class="sd">        The aspects to evaluate. If ``None``, evalute accuracy, completeness, and</span>
+<span class="sd">        clarity. If there is any string other than &quot;accuracy&quot;, &quot;completeness&quot;, and</span>
+<span class="sd">        &quot;clarity&quot;, then they have to be specified in ``aspect_descriptions``.</span>
+<span class="sd">    aspect_descriptions : dict, optional</span>
+<span class="sd">        An optional dictionary mapping aspects to their descriptions. &quot;accuracy&quot;,</span>
+<span class="sd">        &quot;completeness&quot;, and &quot;clarity&quot; have default descriptions but can also be</span>
+<span class="sd">        overridden by this parameter. Any other aspect, if used in ``aspects``, must</span>
+<span class="sd">        exist as a key here.</span>
+<span class="sd">    n_iter : int, default=3</span>
+<span class="sd">        The number of iterations for each data item. The mean of the scores for each</span>
+<span class="sd">        data item will be taken as the final score.</span>
+<span class="sd">    timeout : float, default=60</span>
+<span class="sd">        The timeout in seconds. This is not the OpenAI timeout, but the timeout for</span>
+<span class="sd">        cancelling the worker tasks.</span>
+<span class="sd">    model : str, default=&quot;gpt-3.5-turbo&quot;</span>
+<span class="sd">        The ID of the model to use, must be one of the available OpenAI models that</span>
+<span class="sd">        support the ChatCompletion API. See also</span>
+<span class="sd">        https://platform.openai.com/docs/models/model-endpoint-compatibility</span>
+<span class="sd">    logging_mode : {&quot;all&quot;, &quot;failed&quot;, &quot;none&quot;}, default=&quot;all&quot;</span>
+<span class="sd">        The logging mode, whether to save the logs of all items, or only of failed</span>
+<span class="sd">        items, or save no log.</span>
+<span class="sd">    verbose : int, default=0</span>
+<span class="sd">        The verbosity level of the processing. For negative levels, only a progress bar</span>
+<span class="sd">        will be displayed. For level 0, the errored items will also be displayed. For</span>
+<span class="sd">        positive levels, the all items will be displayed, and the verbosity level</span>
+<span class="sd">        determines the number of lines to display for the message of each item.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Here are some examples of ``info_func``:</span>
+
+<span class="sd">    Assume that ``dataset`` is in ``.jsonl`` format and each line is of the following</span>
+<span class="sd">    form: ``{{&quot;instruction&quot;: &quot;xxx&quot;, &quot;input&quot;: &quot;xxx&quot;, &quot;output&quot;: &quot;xxx&quot;, &quot;history&quot;: [],</span>
+<span class="sd">    &quot;response&quot;: &quot;xxx&quot;}}``. Then ``info_func`` can be defined as follows:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        def info_func(data_item: dict) -&gt; tuple[str, str, str]:</span>
+<span class="sd">            question = data_item[&quot;instruction&quot;] + &quot;\\n&quot; + data_item[&quot;input&quot;]</span>
+<span class="sd">            actual = data_item[&quot;response&quot;]</span>
+<span class="sd">            expected = data_item[&quot;output&quot;]</span>
+<span class="sd">            return question, actual, expected</span>
+
+<span class="sd">    Now assume that ``dataset`` is in ``.csv`` format with columns &quot;question&quot;,</span>
+<span class="sd">    &quot;answer&quot;, and &quot;response&quot;. Then ``info_func`` can be defined as follows:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        def info_func(data_item: pandas.Series) -&gt; tuple[str, str, str]:</span>
+<span class="sd">            question, answer, response = data_item[[&quot;question&quot;, &quot;answer&quot;, &quot;response&quot;]]</span>
+<span class="sd">            return question, response, answer</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_pattern</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;```[a-z]*\n(.+)\n```&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">dataset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">save_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">openai_config</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">info_func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">DataItemType</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">fmt</span><span class="p">:</span> <span class="n">DatasetFormat</span> <span class="o">=</span> <span class="s2">&quot;jsonl&quot;</span><span class="p">,</span>
+        <span class="n">domain</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">aspects</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">aspect_descriptions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">n_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
+        <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">60</span><span class="p">,</span>
+        <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gpt-3.5-turbo&quot;</span><span class="p">,</span>
+        <span class="n">logging_mode</span><span class="p">:</span> <span class="n">LoggingMode</span> <span class="o">=</span> <span class="s2">&quot;all&quot;</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">info_func</span> <span class="o">=</span> <span class="n">info_func</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">domain</span> <span class="o">=</span> <span class="n">domain</span>
+
+        <span class="c1"># Determine the aspects to evaluate on</span>
+        <span class="n">avail_aspects</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;accuracy&quot;</span><span class="p">,</span> <span class="s2">&quot;completeness&quot;</span><span class="p">,</span> <span class="s2">&quot;clarity&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aspects</span> <span class="o">=</span> <span class="n">avail_aspects</span> <span class="k">if</span> <span class="n">aspects</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">aspects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aspect_descriptions</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;accuracy&quot;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="s2">&quot;Using the reference answer as the ground truth, does my answer &quot;</span>
+                <span class="s2">&quot;include factually incorrect information?&quot;</span>
+            <span class="p">),</span>
+            <span class="s2">&quot;completeness&quot;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="s2">&quot;Compared with the reference answer, is my answer missing details?&quot;</span>
+            <span class="p">),</span>
+            <span class="s2">&quot;clarity&quot;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="s2">&quot;Is my answer well-organized and clearly presented? If accuracy and &quot;</span>
+                <span class="s2">&quot;completeness is bad, clarity should also be bad.&quot;</span>
+            <span class="p">),</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">aspect_descriptions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aspect_descriptions</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">aspect_descriptions</span><span class="p">)</span>
+
+        <span class="c1"># Validate the arguments</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">info_func</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InvalidParameterError</span><span class="p">(</span>
+                <span class="s2">&quot;info_func&quot;</span><span class="p">,</span> <span class="n">actual</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">info_func</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;must be a callable&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aspects</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InvalidParameterError</span><span class="p">(</span>
+                <span class="s2">&quot;aspects&quot;</span><span class="p">,</span> <span class="n">actual</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aspects</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;must be a list&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="nb">any</span><span class="p">(</span><span class="n">subject</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aspect_descriptions</span> <span class="k">for</span> <span class="n">subject</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aspects</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aspects</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aspects</span><span class="p">))</span>
+            <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aspects</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InvalidParameterError</span><span class="p">(</span>
+                <span class="s2">&quot;aspects&quot;</span><span class="p">,</span>
+                <span class="n">actual</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aspects</span><span class="p">,</span>
+                <span class="n">reason</span><span class="o">=</span><span class="p">(</span>
+                    <span class="s2">&quot;must be a list of non-duplicated aspects among &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aspect_descriptions</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Set the subject explanations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_explanations</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">subject</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">aspect_descriptions</span><span class="p">[</span><span class="n">subject</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">for</span> <span class="n">subject</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">aspects</span>
+        <span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot; in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># Inherit from parent</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
+            <span class="n">save_path</span><span class="o">=</span><span class="n">save_path</span><span class="p">,</span>
+            <span class="n">subjects</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">aspects</span><span class="p">,</span>
+            <span class="n">openai_config</span><span class="o">=</span><span class="n">openai_config</span><span class="p">,</span>
+            <span class="n">fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span>
+            <span class="n">n_iter</span><span class="o">=</span><span class="n">n_iter</span><span class="p">,</span>
+            <span class="n">agg_method</span><span class="o">=</span><span class="s2">&quot;mean&quot;</span><span class="p">,</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">,</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+            <span class="n">logging_mode</span><span class="o">=</span><span class="n">logging_mode</span><span class="p">,</span>
+            <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_prompt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_item</span><span class="p">:</span> <span class="n">DataItemType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;:meta private:&quot;&quot;&quot;</span>
+        <span class="n">question</span><span class="p">,</span> <span class="n">actual</span><span class="p">,</span> <span class="n">expected</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">info_func</span><span class="p">(</span><span class="n">data_item</span><span class="p">)</span>
+        <span class="n">explanation_expr</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">. </span><span class="si">{</span><span class="n">explanation</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">explanation</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_explanations</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="s2">&quot;You are a professional, impartial, and strict scorer. You will be given &quot;</span>
+            <span class="s2">&quot;a question, a pending scored answer, and a reference answer &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_domain</span><span class="si">}</span><span class="s2">. Please rate the pending scored answer based on the &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;reference answer in the following aspects:</span><span class="se">\n</span><span class="si">{</span><span class="n">explanation_expr</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">Each &quot;</span>
+            <span class="s2">&quot;score should be from 1 to 5. Your rating should be strict enough, and do &quot;</span>
+            <span class="s2">&quot;not easily give full scores. In your response, you should only include a &quot;</span>
+            <span class="s2">&quot;JSON object, with keys being the aspects and values being the scores. Do &quot;</span>
+            <span class="s2">&quot;not include any additional information or explanation.&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;### Question</span><span class="se">\n</span><span class="s2">```</span><span class="se">\n</span><span class="si">{</span><span class="n">question</span><span class="si">}</span><span class="se">\n</span><span class="s2">```</span><span class="se">\n\n</span><span class="s2">### Reference answer</span><span class="se">\n</span><span class="s2">```</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">expected</span><span class="si">}</span><span class="se">\n</span><span class="s2">```</span><span class="se">\n\n</span><span class="s2">### Pending scored answer</span><span class="se">\n</span><span class="s2">```</span><span class="se">\n</span><span class="si">{</span><span class="n">actual</span><span class="si">}</span><span class="se">\n</span><span class="s2">```&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_extract_scores</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">reply</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">data_item</span><span class="p">:</span> <span class="n">DataItemType</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Real</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Real</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;:meta private:&quot;&quot;&quot;</span>
+        <span class="n">scores</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Real</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">scores</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">subject</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span> <span class="n">score</span> <span class="k">for</span> <span class="n">subject</span><span class="p">,</span> <span class="n">score</span> <span class="ow">in</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">reply</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">}</span>
+
+        <span class="c1"># Try to search for a code block in the reply; if errored, leave as is</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pattern</span><span class="p">,</span> <span class="n">reply</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="n">match</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;backup pattern matching failed.&quot;</span>
+            <span class="n">scores</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">subject</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span> <span class="n">score</span>
+                <span class="k">for</span> <span class="n">subject</span><span class="p">,</span> <span class="n">score</span> <span class="ow">in</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">}</span>
+        <span class="k">return</span> <span class="n">scores</span></div>
+
+
+<div class="viewcode-block" id="QaMetricEvaluator"><a class="viewcode-back" href="../../../modules/ml3m.qa.html#ml3m.qa.QaMetricEvaluator">[docs]</a><span class="k">class</span> <span class="nc">QaMetricEvaluator</span><span class="p">(</span><span class="n">BaseEvaluator</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Evaluator for question-answering via common metrics.</span>
+
+<span class="sd">    This evaluator supports using the following metric to compare the actual response</span>
+<span class="sd">    with the reference answer:</span>
+
+<span class="sd">    - `BLEU-k &lt;https://en.wikipedia.org/wiki/BLEU&gt;`_ (BiLingual Evaluation Understudy)</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dataset : str or pathlib.Path</span>
+<span class="sd">        The absolute path to the evaluation dataset.</span>
+<span class="sd">    save_path : str or pathlib.Path</span>
+<span class="sd">        The absolute path to the save location. This path may or may not exist, and if</span>
+<span class="sd">        it exists, its file contents will be treated as a (partially) written result.</span>
+<span class="sd">        Whether to overwrite the existing results or to build on them depend on</span>
+<span class="sd">        ``overwrite`` when using the :meth:`QaMetricEvaluator.evaluate` method.</span>
+<span class="sd">    info_func : Callable</span>
+<span class="sd">        The function that extracts the question, actual answer, and expected answer of</span>
+<span class="sd">        a data item. The input parameter should be a :class:`pandas.Series`, a list, or</span>
+<span class="sd">        a dictionary, depending on ``fmt`` and the specific type of each data item. The</span>
+<span class="sd">        output should be a tuple of three strings, respectively the question, the actual</span>
+<span class="sd">        answer to that question, and the expected answer of that question. See the notes</span>
+<span class="sd">        for examples.</span>
+<span class="sd">    fmt : {&quot;jsonl&quot;, &quot;json&quot;, &quot;csv&quot;}, default=&quot;jsonl&quot;</span>
+<span class="sd">        The format of ``dataset``.</span>
+<span class="sd">    bleu_k : list of int or None</span>
+<span class="sd">        The list of k-values used for BLEU-k. Must be positive. If ``None``, use k-</span>
+<span class="sd">        values 1 to 4.</span>
+<span class="sd">    logging_mode : {&quot;all&quot;, &quot;failed&quot;, &quot;none&quot;}, default=&quot;all&quot;</span>
+<span class="sd">        The logging mode, whether to save the logs of all items, or only of failed</span>
+<span class="sd">        items, or save no log.</span>
+<span class="sd">    verbose : int, default=0</span>
+<span class="sd">        The verbosity level of the processing. For negative levels, only a progress bar</span>
+<span class="sd">        will be displayed. For level 0, the errored items will also be displayed. For</span>
+<span class="sd">        positive levels, the all items will be displayed, and the verbosity level</span>
+<span class="sd">        determines the number of lines to display for the message of each item.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Here are some examples of ``info_func``:</span>
+
+<span class="sd">    Assume that ``dataset`` is in ``.jsonl`` format and each line is of the following</span>
+<span class="sd">    form: ``{{&quot;instruction&quot;: &quot;xxx&quot;, &quot;input&quot;: &quot;xxx&quot;, &quot;output&quot;: &quot;xxx&quot;, &quot;history&quot;: [],</span>
+<span class="sd">    &quot;response&quot;: &quot;xxx&quot;}}``. Then ``info_func`` can be defined as follows:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        def info_func(data_item: dict) -&gt; tuple[str, str, str]:</span>
+<span class="sd">            question = data_item[&quot;instruction&quot;] + &quot;\\n&quot; + data_item[&quot;input&quot;]</span>
+<span class="sd">            actual = data_item[&quot;response&quot;]</span>
+<span class="sd">            expected = data_item[&quot;output&quot;]</span>
+<span class="sd">            return question, actual, expected</span>
+
+<span class="sd">    Now assume that ``dataset`` is in ``.csv`` format with columns &quot;question&quot;,</span>
+<span class="sd">    &quot;answer&quot;, and &quot;response&quot;. Then ``info_func`` can be defined as follows:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        def info_func(data_item: pandas.Series) -&gt; tuple[str, str, str]:</span>
+<span class="sd">            question, answer, response = data_item[[&quot;question&quot;, &quot;answer&quot;, &quot;response&quot;]]</span>
+<span class="sd">            return question, response, answer</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">dataset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">save_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">info_func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">DataItemType</span><span class="p">],</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">fmt</span><span class="p">:</span> <span class="n">DatasetFormat</span> <span class="o">=</span> <span class="s2">&quot;jsonl&quot;</span><span class="p">,</span>
+        <span class="n">bleu_k</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">logging_mode</span><span class="p">:</span> <span class="n">LoggingMode</span> <span class="o">=</span> <span class="s2">&quot;all&quot;</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">info_func</span> <span class="o">=</span> <span class="n">info_func</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bleu_k</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span> <span class="k">if</span> <span class="n">bleu_k</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">bleu_k</span>
+
+        <span class="c1"># Validate the arguments</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bleu_k</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="n">k</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bleu_k</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="n">InvalidParameterError</span><span class="p">(</span>
+                <span class="s2">&quot;bleu_k&quot;</span><span class="p">,</span>
+                <span class="n">actual</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bleu_k</span><span class="p">,</span>
+                <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;must be a list of positive integers&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Inherit from parent</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span>
+            <span class="n">save_path</span><span class="o">=</span><span class="n">save_path</span><span class="p">,</span>
+            <span class="n">subjects</span><span class="o">=</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;BLEU-</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bleu_k</span><span class="p">],</span>
+            <span class="n">fmt</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span>
+            <span class="n">workers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="n">n_iter</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="n">agg_method</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">logging_mode</span><span class="o">=</span><span class="n">logging_mode</span><span class="p">,</span>
+            <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_score</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_item</span><span class="p">:</span> <span class="n">DataItemType</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Real</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Real</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;:meta private:&quot;&quot;&quot;</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">actual</span><span class="p">,</span> <span class="n">expected</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">info_func</span><span class="p">(</span><span class="n">data_item</span><span class="p">)</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="c1"># Compute the desired BLEU scores</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">bleu_score</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bleu_k</span><span class="p">,</span> <span class="n">bleu</span><span class="p">(</span><span class="n">actual</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bleu_k</span><span class="p">)):</span>
+            <span class="n">scores</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;BLEU-</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bleu_score</span>
+
+        <span class="c1"># mypy not working with numbers.Real</span>
+        <span class="k">return</span> <span class="n">scores</span>  <span class="c1"># type: ignore[return-value]</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_aget_score</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">data_item</span><span class="p">:</span> <span class="n">DataItemType</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Real</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Real</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;:meta private:&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_score</span><span class="p">(</span><span class="n">data_item</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Yao Xiao.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
